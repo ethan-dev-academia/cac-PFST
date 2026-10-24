@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Pasco Flood Map</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+  :root { --ink: #e8f1ff; --muted: #8aa2c2; --line: rgba(160,200,255,.16); --glass: rgba(10,22,40,.74); --accent: #4cc3ff; --bad: #ff5468; --ok: #3ee6a8; }
+  html, body, #map { margin: 0; height: 100%; background: #050b16; font-family: Inter, system-ui, sans-serif; color: var(--ink); }
+  .glass { background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--line); border-radius: 14px; }
+  #legend { position: absolute; left: 12px; bottom: 28px; padding: 10px 12px; font-size: 11px; color: var(--muted); min-width: 190px; display: none; }
+  #legend .bar { height: 8px; border-radius: 4px; margin: 6px 0 4px; background: linear-gradient(90deg, rgba(165,230,255,.5), #60c4ff 15%, #2684ff 30%, #1850dc 45%, #341eaa 70%, #5a0a78); }
+  #legend .ticks { display: flex; justify-content: space-between; }
+  .maplibregl-popup-content { background: var(--glass); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(12px); font-size: 12px; padding: 10px 12px; }
+  .maplibregl-popup-tip { display: none; }
+  .maplibregl-ctrl-attrib { background: rgba(5,11,22,.6) !important; color: #6d84a6; font-size: 10px; }
+  .maplibregl-ctrl-attrib a { color: #8aa2c2; }
+  .pin { width: 22px; height: 22px; border-radius: 50%; background: var(--bad); border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(255,84,104,.35), 0 6px 18px rgba(0,0,0,.5); animation: pulse 1.8s ease-out infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,84,104,.6), 0 6px 18px rgba(0,0,0,.5);} 100% { box-shadow: 0 0 0 22px rgba(255,84,104,0), 0 6px 18px rgba(0,0,0,.5);} }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="legend" class="glass"><div>Max flood depth (mean)</div><div class="bar"></div>
+  <div class="ticks"><span>0</span><span>0.5</span><span>1 ft</span><span>2</span><span>3+</span><span>6.5</span></div></div>
+<script src="common.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+<script>
+const ORG = "https://services6.arcgis.com/Mo4MddfRHpFwT7UF/ArcGIS/rest/services";
+const S = { tiles: [], tile: null, corners: null, result: null, edits: [], marker: null, depth: null };
+
+const map = new maplibregl.Map({
+  container: "map", center: [-82.71, 28.30], zoom: 10.6, pitch: 50, bearing: -12, maxPitch: 80,
+  attributionControl: { compact: true },
+  style: {
+    version: 8, glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+    sources: {
+      sat: { type: "raster", tileSize: 256, maxzoom: 19,
+             tiles: ["https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+             attribution: "Imagery © Esri, Maxar, Earthstar" },
+      labels: { type: "raster", tileSize: 256,
+             tiles: ["https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"] },
+      dem: { type: "raster-dem", encoding: "terrarium", tileSize: 256, maxzoom: 15,
+             tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"], attribution: "Terrain: AWS Terrain Tiles" },
+      fema: { type: "raster", tileSize: 256,
+             tiles: ["https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&layers=show:28&f=image"],
+             attribution: "FEMA NFHL" },
+    },
+    layers: [
+      { id: "sat", type: "raster", source: "sat", paint: { "raster-saturation": -0.25, "raster-brightness-max": 0.78, "raster-contrast": 0.1 } },
+      { id: "fema", type: "raster", source: "fema", layout: { visibility: "none" }, paint: { "raster-opacity": 0.55 } },
+      { id: "labels", type: "raster", source: "labels", paint: { "raster-opacity": 0.85 } },
+    ],
+    sky: { "sky-color": "#0b1a2e", "horizon-color": "#1c3a5e", "fog-color": "#0b1a2e", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.6, "fog-ground-blend": 0.3 },
+  },
+});
+map.on("error", (e) => console.warn("map error", e.error?.message || e));
+if (innerWidth > 760) map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
+
+const empty = { type: "FeatureCollection", features: [] };
+map.on("load", async () => {
+  if (PF.params.get("terrain") !== "0") map.setTerrain({ source: "dem", exaggeration: 4 });
+  map.addSource("tiles", { type: "geojson", data: empty });
+  map.addSource("observed", { type: "geojson", data: empty });
+  map.addSource("swfwmd", { type: "geojson", data: empty });
+  map.addSource("buildings", { type: "geojson", data: empty });
+  map.addSource("edits", { type: "geojson", data: empty });
+  map.addLayer({ id: "swfwmd", type: "fill", source: "swfwmd", layout: { visibility: "none" },
+                 paint: { "fill-color": "#ffd166", "fill-opacity": 0.22, "fill-outline-color": "#ffd166" } });
+  map.addLayer({ id: "observed", type: "fill", source: "observed", layout: { visibility: "none" },
+                 paint: { "fill-color": "#ff5468", "fill-opacity": 0.28 } });
+  map.addLayer({ id: "observed-line", type: "line", source: "observed", layout: { visibility: "none" },
+                 paint: { "line-color": "#ff8a98", "line-width": 1.2 } });
+  map.addLayer({ id: "tiles-fill", type: "fill", source: "tiles",
+                 paint: { "fill-color": ["case", ["boolean", ["feature-state", "sel"], false], "rgba(76,195,255,0.0)", "rgba(76,195,255,0.18)"],
+                          "fill-outline-color": "rgba(76,195,255,0.5)" } });
+  map.addLayer({ id: "tiles-line", type: "line", source: "tiles",
+                 paint: { "line-color": ["case", ["boolean", ["feature-state", "sel"], false], "#ffffff", "rgba(76,195,255,0.7)"],
+                          "line-width": ["case", ["boolean", ["feature-state", "sel"], false], 2.4, 1.4], "line-dasharray": [2, 1] } });
+  map.addLayer({ id: "buildings", type: "fill-extrusion", source: "buildings", minzoom: 13,
+                 paint: { "fill-extrusion-color": ["case", [">", ["get", "d"], 0.3048], "#ff5468", [">", ["get", "d"], 0.05], "#ffb547", "#e9eef7"],
+                          "fill-extrusion-height": ["case", [">", ["get", "d"], 0.3048], 9, 6],
+                          "fill-extrusion-opacity": 0.92 } });
+  map.addLayer({ id: "edits-fill", type: "fill", source: "edits", filter: ["==", ["geometry-type"], "Polygon"],
+                 paint: { "fill-color": "#3ee6a8", "fill-opacity": 0.35 } });
+  map.addLayer({ id: "edits-line", type: "line", source: "edits",
+                 paint: { "line-color": "#3ee6a8", "line-width": ["case", ["==", ["geometry-type"], "LineString"], 6, 2] } });
+
+  try {
+    const cat = await PF.getJSON("/tiles");
+    S.tiles = cat.tiles;
+    map.getSource("tiles").setData({ type: "FeatureCollection", features: cat.tiles.map((t, i) => ({
+      type: "Feature", id: i, properties: { id: t.id, place: t.place, buildings: t.buildings },
+      geometry: { type: "Polygon", coordinates: [[...t.corners, t.corners[0]]] } })) });
+  } catch (e) { console.warn(e); }
+  // countywide observed-flooding polygons straight from the county service (small layer)
+  fetch(`${ORG}/PascoMapper_Storm/FeatureServer/6/query?where=1%3D1&outFields=*&outSR=4326&f=geojson`)
+    .then((r) => r.json()).then((g) => map.getSource("observed").setData(g)).catch(() => {});
+  PF.send({ type: "ready", view: "map" });
+  const t = PF.params.get("tile"); if (t) await selectTile(t, true);
+  const rk = PF.params.get("result"); if (rk) showResult(rk).catch(() => {});
+});
+
+function featIndex(id) { return S.tiles.findIndex((t) => t.id === id); }
+let selIdx = -1;
+async function selectTile(tid, fly = true) {
+  if (selIdx >= 0) map.setFeatureState({ source: "tiles", id: selIdx }, { sel: false });
+  selIdx = featIndex(tid);
+  if (selIdx >= 0) map.setFeatureState({ source: "tiles", id: selIdx }, { sel: true });
+  if (S.tile !== tid) {
+    S.tile = tid; S.result = null; S.depth = null; clearOverlay();
+    const meta = S.tiles[selIdx] || (await PF.getJSON(`/tiles/${tid}`));
+    S.corners = meta.corners;
+    PF.getJSON(`/tiles/${tid}/buildings`).then((g) => { S.bfc = g; colorBuildings(); }).catch(() => {});
+    PF.getJSON(`/tiles/${tid}/layers/swfwmd_100yr`).then((g) => map.getSource("swfwmd").setData(g)).catch(() => {});
+  }
+  if (fly && S.corners) {
+    const lons = S.corners.map((c) => c[0]), lats = S.corners.map((c) => c[1]);
+    map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
+                  { padding: padding(), pitch: 58, bearing: -20, duration: 2200 });
+  }
+  drawEdits();
+}
+
+function padding() {
+  const w = innerWidth, h = innerHeight, wide = w > 760;
+  return wide ? { top: 80, bottom: 60, left: Math.min(500, w * 0.38), right: 40 }
+              : { top: Math.min(80, h * 0.12), bottom: Math.min(300, h * 0.42), left: 20, right: 20 };
+}
+function clearOverlay() {
+  if (map.getLayer("depth")) map.removeLayer("depth");
+  if (map.getSource("depth")) map.removeSource("depth");
+  document.getElementById("legend").style.display = "none";
+}
+function colorBuildings() {
+  if (!S.bfc) return;
+  const d = S.depth;
+  S.bfc.features.forEach((f) => (f.properties.d = d ? d[f.properties.k] : 0));
+  map.getSource("buildings").setData(S.bfc);
+}
+let showSeq = 0;
+async function showResult(key) {
+  const my = ++showSeq;   // overlapping calls (app re-posts on "ready"): only the latest one draws
+  const r = await PF.getJSON(`/jobs/${key}`);
+  if (my !== showSeq) return;
+  if (r.status !== "done") return;
+  if (r.tile_id !== S.tile) await selectTile(r.tile_id, true);
+  S.result = r; S.depth = PF.mm(r.grids.mean);
+  clearOverlay();
+  // canvas source + no "raster-resampling: nearest": that paint property rendered the RGBA overlay
+  // black (MapLibre 5.24, D3D11 and SwiftShader). The PNG is already 4x nearest-upscaled server-side.
+  const img = new Image(); img.crossOrigin = "anonymous"; img.src = `${PF.api}/jobs/${key}/overlay.png`;
+  await img.decode();
+  if (my !== showSeq) return;
+  clearOverlay();
+  let cv = document.getElementById("depthcv");
+  if (!cv) { cv = document.createElement("canvas"); cv.id = "depthcv"; cv.style.display = "none"; document.body.appendChild(cv); }
+  cv.width = img.width; cv.height = img.height;
+  const ctx = cv.getContext("2d"); ctx.clearRect(0, 0, cv.width, cv.height); ctx.drawImage(img, 0, 0);
+  map.addSource("depth", { type: "canvas", canvas: "depthcv", coordinates: S.corners, animate: false });
+  map.addLayer({ id: "depth", type: "raster", source: "depth", paint: { "raster-opacity": 0, "raster-opacity-transition": { duration: 1200 } } }, "buildings");
+  requestAnimationFrame(() => map.setPaintProperty("depth", "raster-opacity", 0.9));
+  document.getElementById("legend").style.display = "block";
+  S.edits = r.scenario.edits || S.edits; drawEdits(); colorBuildings();
+}
+
+function circle(center, radiusCells) {
+  const pts = [];
+  for (let a = 0; a <= 48; a++) pts.push(PF.cellToLonLat(S.corners, center[0] + radiusCells * Math.sin(a / 48 * 2 * Math.PI), center[1] + radiusCells * Math.cos(a / 48 * 2 * Math.PI)));
+  return pts;
+}
+function drawEdits() {
+  if (!map.getSource("edits") || !S.corners) return;
+  const feats = [];
+  for (const e of S.edits) {
+    if (e.type === "pond" && e.center) feats.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [circle(e.center, (e.radius_m || 40) / 10)] } });
+    if (e.type === "road" && e.path?.length > 1) feats.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: e.path.map(([r, c]) => PF.cellToLonLat(S.corners, r, c)) } });
+    if (e.type === "culvert" && e.a && e.b) feats.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [e.a, e.b].map(([r, c]) => PF.cellToLonLat(S.corners, r, c)) } });
+  }
+  map.getSource("edits").setData({ type: "FeatureCollection", features: feats });
+}
+
+map.on("click", (e) => {
+  const { lng, lat } = e.lngLat;
+  if (S.corners) {
+    const [r, c] = PF.lonLatToCell(S.corners, lng, lat);
+    if (r >= -0.5 && r < 127.5 && c >= -0.5 && c < 127.5) {
+      const rr = Math.round(r), cc = Math.round(c), k = rr * 128 + cc;
+      const info = { type: "tap", cell: [rr, cc], lonlat: [lng, lat] };
+      if (S.result) {
+        const g = S.result.grids; info.mean_ft = +(PF.mm(g.mean)[k] / PF.FT).toFixed(2);
+        info.p10_ft = +(PF.mm(g.p10)[k] / PF.FT).toFixed(2); info.p90_ft = +(PF.mm(g.p90)[k] / PF.FT).toFixed(2);
+        new maplibregl.Popup({ closeButton: false, offset: 12 }).setLngLat(e.lngLat)
+          .setHTML(`<b style="font-size:15px">${info.mean_ft.toFixed(1)} ft</b> max depth<br><span style="color:#8aa2c2">p10 ${info.p10_ft.toFixed(1)} · p90 ${info.p90_ft.toFixed(1)} ft</span>`).addTo(map);
+      }
+      PF.send(info); return;
+    }
+  }
+  const f = map.queryRenderedFeatures(e.point, { layers: ["tiles-fill"] })[0];
+  if (f) { PF.send({ type: "selectTile", tile_id: f.properties.id }); selectTile(f.properties.id); return; }
+  PF.send({ type: "tapOutside", lonlat: [lng, lat] });
+});
+map.on("mousemove", "tiles-fill", () => (map.getCanvas().style.cursor = "pointer"));
+map.on("mouseleave", "tiles-fill", () => (map.getCanvas().style.cursor = ""));
+
+const LAYER_IDS = { fema: ["fema"], observed: ["observed", "observed-line"], swfwmd: ["swfwmd"], buildings: ["buildings"] };
+// messages can arrive before the style has loaded; queue them until then
+let styleReady = false;
+const pending = [];
+map.on("load", () => { styleReady = true; setTimeout(() => pending.splice(0).forEach(handle), 0); });
+PF.onMessage((m) => (styleReady ? handle(m) : pending.push(m)));
+async function handle(m) {
+  if (m.type === "load" && m.tile_id) selectTile(m.tile_id, m.fly !== false);
+  if (m.type === "result" && m.key) showResult(m.key);
+  if (m.type === "clear") { S.result = null; S.depth = null; clearOverlay(); colorBuildings(); }
+  if (m.type === "edits") { S.edits = m.edits || []; drawEdits(); }
+  if (m.type === "layers") for (const [k, on] of Object.entries(m.layers || {}))
+    (LAYER_IDS[k] || []).forEach((id) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", on ? "visible" : "none"));
+  if (m.type === "pin" && m.lonlat) {
+    S.marker?.remove(); const el = document.createElement("div"); el.className = "pin";
+    S.marker = new maplibregl.Marker({ element: el }).setLngLat(m.lonlat).addTo(map);
+    map.flyTo({ center: m.lonlat, zoom: 16.3, pitch: 62, duration: 2400, essential: true });
+  }
+  if (m.type === "terrain") map.setTerrain(m.on ? { source: "dem", exaggeration: m.exaggeration || 4 } : null);
+}
+</script>
+</body>
+</html>

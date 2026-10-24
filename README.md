@@ -1,38 +1,88 @@
-# Pasco Flood Screening Tool.
-Idea from PINO paper — a Fourier Neural Operator trained on your own synthetic solver runs — but the PDE is 2D overland flow (diffusive-wave shallow water) on the county’s LiDAR terrain instead of groundwater. Inputs: elevation tile, rainfall intensity or surge height at the coast, and the state of drainage (culverts, retention ponds, raised roads). Output: inundation depth across the tile.
+# Pasco Flood Screening Tool
 
-# Two faces of the same app:
-## Residents:
-type an address, see depth under a 10-year storm, a 100-year storm, and a Helene-scale surge — with bands, because terrain and rainfall are uncertain.
+> "Pasco just committed $235 million to flood mitigation with a five-year deadline. Here's a tool that shows where each dollar removes the most water."
 
-## County:
-Draw a proposed project (retention pond here, raise this road, clear this culvert) and see how many homes drop out of the inundation footprint. That’s a per-dollar ranking for the $235M, which nobody on staff can do interactively today.
+The idea comes from the PINO paper: a Fourier Neural Operator trained on our own synthetic solver runs. Here the PDE is 2D overland flow on the county's lidar terrain instead of groundwater.
+- **Inputs:** a 1.28 km elevation tile, a design storm (NOAA Atlas 14), a coastal surge level, and drainage edits (retention ponds, raised roads, culverts).
+- **Output:** max inundation depth across the tile, with p10/p90 bands.
 
-###
-Data is all public: Pasco/SWFWMD LiDAR DEM, FEMA flood zones, NOAA Atlas 14 rainfall, county stormwater project list, Helene/Milton high-water marks from USGS. Solver is a few hundred lines of numpy on 128×128 DEM tiles; same FNO training pipeline as before.
-Honest framing: screening-grade, not a replacement for the county’s engineering models — a way to decide which neighborhoods get the full study first.
-Opening line of the video: “Pasco just committed $235 million to flood mitigation with a five-year deadline. Here’s a tool that shows where each dollar removes the most water.”
+**Honest framing:** this is screening-grade. It does not replace the county's engineering models. It is a way to decide which neighborhoods get the full study first.
 
-# Backend (Python)
+> `SOLVER_SPEC.md` is the only binding contract (for `floodsolver/`). Everything else here describes the direction and the current build. Cut order and pitfalls are in [`ROADMAP.md`](ROADMAP.md); verified data endpoints and units are in [`DATA_SOURCES.md`](DATA_SOURCES.md).
 
-1. Solver — this week, before anything else.
- 2D diffusive-wave overland flow on a grid:
-State: water depth h(x,y,t). Water surface η = z + h, where z is terrain.
-Flux between cells: q = −(h^(5/3) / n) · ∇η / |∇η|^(1/2) (Manning). Explicit time stepping with a CFL-limited dt.
-Inputs: DEM tile (128×128, 10 m cells from Pasco/SWFWMD LiDAR), rainfall rate r(t), boundary head at coast cells (surge), optional “infrastructure mask” (cells with added storage or raised elevation).
-Output: max depth over the event, h_max(x,y).
-~150 lines of numpy. Validate on a tilted plane and a bowl before trusting it.
+## Two faces of the same app
 
-3. Dataset — weekend.
- Sample ~3,000 scenarios: 20–30 real DEM tiles from west Pasco (Hudson, Sea Pines, Port Richey, Holiday) plus synthetic bumps; rainfall from NOAA Atlas 14 return periods (2-yr to 100-yr); surge 0–8 ft; random infrastructure edits (pond, raised road). Save (inputs, h_max) as .npz. Run overnight.
+- **Residents:** search an address and get *"your parcel: 0.4 ft (p10 0.1, p90 1.1)"* for a 10-yr storm, a 100-yr storm and a Helene-scale surge.
+- **County:** place a retention pond or raise a road, run, and see how many homes drop out of the > 1 ft footprint. The report exports a one-page PDF memo.
 
-4. FNO — week 2.
- neuraloperator package. Inputs stacked as channels: DEM, rainfall-total map, surge-boundary map, infrastructure mask. Output: h_max. Add a physics term to the loss — mass-balance residual (total water in = rainfall + inflow − outflow − storage) is cheap and keeps it honest. Train on a laptop GPU or Colab in a few hours. Target: relative L2 under 10% on held-out tiles.
+## Status
 
-5. Uncertainty.
- Don’t train a Bayesian net — run the operator over an ensemble: ±20% rainfall, ±2 ft surge, DEM noise. 30 forward passes in under a second. Return mean, p10, p90 per cell.
+| Piece | State |
+|---|---|
+| Solver `floodsolver/` | Done. Spec v1.4, 9/9 contract tests. Stable on real lidar tiles; mass closes to ~1e-14 |
+| Data pipeline `pfst/` | Done. DEM fetch + cleanup, 48-tile catalog (40 train / 8 held-out), Atlas 14 + SCS III storms, Helene surge, edits |
+| Dataset `python -m pfst.generate` | Seeded. 96-scenario seed set made locally; the full 3,000 runs on the GPU box (`training/README.md`) |
+| FNO training `training/` | Ready, not trained. Smoke-tested end to end; the API loads its checkpoint |
+| API `api/` | Done. FastAPI; runs the solver as a fallback until `models/fno.pt` exists |
+| App `app/` | Done. Expo (iOS / Android / web-desktop): map with 3D terrain, 3D tile explorer, scenarios, parcel lookup, report + PDF |
 
-6. API — FastAPI, one endpoint.
- POST /predict with {tile_id, rainfall_return_period, surge_ft, edits: [...]} → returns depth grid (mean/p10/p90) as base64 PNG or flat array + summary stats (cells above 1 ft, homes flagged). Host on Render/Railway/Fly free tier; GPU not needed for inference at this size. Preload the model at startup.
+## Architecture
 
+```
+SWFWMD lidar ─► pfst.dem (ft→m, nodata/Gulf, light sink fill) ─┐
+Atlas 14 + SCS III ─► pfst.rainfall ───────────────────────────┤
+Helene @ 8726724 ─► pfst.surge ────────────────────────────────┼─► floodsolver.run ─► data/dataset/*.npz
+random ponds / roads ─► pfst.scenario ─────────────────────────┘                          │
+                                                                                          ▼
+                                          training/train.py: FNO + mass-balance loss ─► models/fno.pt
+                                                                                          │
+     api/ (FastAPI) ◄─────────────────────────────────────────────────────────────────────┘
+       /predict: 30-member ensemble → mean/p10/p90, PNG overlay, homes flagged (solver fallback: 3 members)
+       /viz/map.html (MapLibre, 3D terrain + extruded buildings)  /viz/explorer.html (three.js)
+         ▲
+     app/ (Expo): WebView on iOS/Android, iframe on web/desktop · search · scenario sheet · report/PDF
+```
 
+### Modeling choices (screening assumptions)
+- **Solver:** local-inertial shallow water (Bates 2010, θ = 0.8 per de Almeida 2012), not the diffusive wave from the first sketch. See `SOLVER_SPEC.md`.
+- **Tile:** 128×128 cells of 10 m on a fixed UTM 17N grid. `pfst.geo` maps any point to its tile id (e.g. `E259N2444`), so tiles outside the catalog are fetched on demand.
+- **Storm and surge:** a 24-hr Atlas 14 depth with an SCS Type III distribution, peaking at t = 12 h. The surge is the Helene hydrograph at Clearwater Beach, rescaled to the requested peak and aligned with the rain peak. The run lasts 20 h, which checks show is long enough for peak depth (< 2 cm change after that).
+- **Fixed parameters:** Manning n = 0.05, initial abstraction 0.5 in, infiltration 5 mm/hr, all tile edges free outfall.
+- **Not modeled:** storm drains and inflow from outside the tile.
+- **"Home flagged":** a building whose own cell has more than 1 ft of water at peak. The lidar raises building pads, so this approximates water above the slab.
+- **Uncertainty:** the FNO runs 30 ensemble members:
+  - rainfall drawn from the Atlas 14 90% CI;
+  - surge ±2 ft;
+  - DEM noise at the lidar RMSE (0.1 m).
+
+  The solver fallback runs 3 members (low / central / high).
+
+## Running it
+
+```bash
+python -m venv .venv && .venv/Scripts/activate   # macOS/Linux: . .venv/bin/activate
+pip install -r requirements-api.txt
+pytest                                            # solver contract + pipeline tests
+
+uvicorn api.main:app --port 8000                  # API + visual pages; open http://localhost:8000
+cd app && npm install && npx expo start           # w = web/desktop; scan the QR with Expo Go for a phone
+```
+
+- **Phones:** the app looks for the API on the same machine as the Expo dev server, at port 8000. Otherwise set `EXPO_PUBLIC_API_URL=http://<lan-ip>:8000`.
+- **Expo Go:** everything used (WebView, print, sharing) ships in Expo Go, so no dev build is needed.
+
+**Training** (GPU machine): see [`training/README.md`](training/README.md). Generate the dataset, smoke test, then train. Drop `models/fno.pt` next to the API and `/health` switches from `solver` to `fno`.
+
+## Repo layout
+
+| Path | What |
+|---|---|
+| `SOLVER_SPEC.md` | Binding solver contract (scheme, boundaries, tests, revision log) |
+| `floodsolver/` | `solver.py` (pure numpy), `analytic.py` (reference solutions) |
+| `pfst/` | Pipeline: `geo` tile grid, `dem`, `rainfall`, `surge`, `scenario` (edits → solver), `tiles` catalog (`tiles.json`), `synthetic` DEMs, `generate` dataset, `features` FNO channels, `layers` county/FEMA GIS |
+| `training/` | `data.py`, `model.py` (FNO), `train.py`, runbook |
+| `api/` | `main.py` endpoints, `predictor.py` (FNO / solver backends), `render.py`, `static/` visual pages |
+| `app/` | Expo app (`App.tsx`, `src/`) |
+| `tests/` | `test_solver.py` (spec §7 T1–T8), `test_pipeline.py` |
+| `diagnostics/` | Committed one-off solver checks |
+| `data/`, `models/` | Generated, git-ignored (DEM cache, dataset, API cache, checkpoints) |

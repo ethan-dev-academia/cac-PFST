@@ -31,16 +31,10 @@ python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_
 pytest                              # 17 tests, ~3 min; all must pass before going further
 ```
 
-### 2. Seed data (saves ~1.5 h)
-**The tile catalog changed in coverage-v2** (126 tiles: every low-lying tile plus 24 higher-ground tiles, sampled coastal-first). The first seed release (`seed-dataset-2026-k0-95`) was made with the old 48-tile catalog and **must not be used**: scenario k would not match. Use the v2 seed release if it exists (`seed-dataset-v2-2026-k0-95`). Otherwise skip this step; the generator just makes those 96 itself.
+### 2. No seed needed
+This machine generates the **whole** dataset itself. Scenario k is fully determined by `(seed 2026, k, pfst/tiles.json)`, so nothing has to be copied from the dev laptop. Ignore the old `seed-dataset-2026-k0-95` release; it was made with the retired 48-tile catalog.
 
-With the v2 archive, from the repo root run:
-```bash
-gh release download seed-dataset-v2-2026-k0-95 -p '*.tgz' -D data/   # or download it in a browser into data/
-tar -xzf data/seed_dataset_v2_2026_k0-95.tgz -C data/                # creates data/dataset/{train,test}/s00000..s00095.npz
-```
-
-### 3. Generate the rest (CPU-bound, long-running)
+### 3. Generate the dataset (CPU-bound, long-running)
 The solver is pure numpy, and `SOLVER_SPEC.md` §9 requires that, so **the GPU does not help here**.
 - Each scenario takes about 60–120 s on one core.
 - Set `--workers` to the number of **physical** cores (`lscpu` on Linux: cores per socket × sockets). SMT threads make every job slower.
@@ -49,7 +43,7 @@ nohup python -m pfst.generate --n 3000 --workers <physical_cores> > data/generat
 ```
 - **Resumable:** the generator skips files that already exist, so re-run the same command after any interruption.
 - **Progress:** `tail data/dataset/generate.log`. Errors appear as `error:` lines; `grep -c error data/dataset/generate.log` should print 0.
-- **Expect** about `3000 × 90 s / cores` (roughly 4 h on 16 cores). DEM tiles download on first use, which needs internet.
+- **Expect** about `3000 × 90 s / cores` from k = 0 (roughly 4 h on 16 cores). DEM tiles download on first use, which needs internet.
 - **To train sooner:** a first model can start once about 1,000 samples exist. The full set is the target.
 
 ### 4. Train
@@ -91,3 +85,11 @@ curl -X POST localhost:8000/predict -H 'content-type: application/json' \
 - `neuraloperator` adds a `_metadata` key to state dicts. `training/model.py` already strips it on load.
 - Deep `h_max` values (4–7 m) are real. They come from excavated retention ponds filling up, and from below-sea-level land under high surge.
 - The FNO doesn't take culvert edits; ponds and raised roads reach it through the `dz` channel. The API ignores culverts when the FNO backend is active.
+
+## Serving the app from this machine (optional)
+The dev laptop only does app development. Until `models/fno.pt` exists, every app scenario runs the numpy solver, which takes about 2 min of several cores. To keep that work here, run the API on this machine:
+```bash
+pip install -r requirements-api.txt
+uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+Then on the laptop start the app with `EXPO_PUBLIC_API_URL=http://<this-machine-ip>:8000 npx expo start`. Once the model is trained, inference is light enough to run anywhere.

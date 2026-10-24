@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from pfst import dem, geo, layers, rainfall, scenario, surge, tiles
+from pfst import county, dem, geo, layers, rainfall, scenario, surge, tiles
 
 from . import render
 from .predictor import make_predictor, rain_band
@@ -76,8 +76,23 @@ def _tile_or_404(tid):
         raise HTTPException(400, f"bad tile id {tid!r}")
 
 
+_GRID = None
+
+
+def grid_index():
+    global _GRID
+    if _GRID is None:
+        _GRID = {g["id"]: g for g in json.loads(county.GRID.read_text())["tiles"]}
+    return _GRID
+
+
+def tile_class(tid):
+    g = grid_index().get(geo.base_tile_of(tid))
+    return g["cls"] if g else "outside"
+
+
 def _tile_summary(t):
-    return {**{k: t[k] for k in ("id", "place", "buildings", "coastal", "split", "z_median")},
+    return {**{k: t[k] for k in ("id", "place", "buildings", "coastal", "split", "z_median")}, "cls": tile_class(t["id"]),
             "center": [t["lon"], t["lat"]], "corners": geo.tile_corners_lonlat(t["id"])}
 
 
@@ -98,11 +113,24 @@ def list_tiles():
     return {"study_bbox": cat["study_bbox"], "tiles": [_tile_summary(t) for t in cat["tiles"]]}
 
 
+@app.get("/grid")
+def county_grid():
+    """Every 1.28 km tile in the county coverage, classified, as GeoJSON (for the map)."""
+    feats = []
+    for g in grid_index().values():
+        c = geo.tile_corners_lonlat(g["id"])
+        feats.append({"type": "Feature", "properties": {k: g.get(k) for k in ("id", "cls", "b", "z10", "zmed")},
+                      "geometry": {"type": "Polygon", "coordinates": [[*c, c[0]]]}})
+    return {"type": "FeatureCollection", "low_m": county.LOW_M, "features": feats}
+
+
 @app.get("/tiles/at")
 def tile_at(lon: float, lat: float):
-    tid = geo.tile_for_lonlat(lon, lat)
+    """Analysis tile centred on the point (overlapping half-lattice), so it is never near an edge."""
+    tid = geo.analysis_tile_for_lonlat(lon, lat)
     _tile_or_404(tid)
-    return {"tile_id": tid, "cell": geo.lonlat_to_cell(tid, lon, lat), "corners": geo.tile_corners_lonlat(tid)}
+    return {"tile_id": tid, "cell": geo.lonlat_to_cell(tid, lon, lat), "corners": geo.tile_corners_lonlat(tid),
+            "cls": tile_class(tid)}
 
 
 @app.get("/tiles/{tid}")
@@ -118,7 +146,7 @@ def tile_detail(tid: str, light: bool = False):
             nb = len(layers.building_cells(tid)[0])
         except Exception:
             nb = 0
-        return {"id": tid, "place": tiles.nearest_place(lon, lat), "buildings": nb,
+        return {"id": tid, "place": tiles.nearest_place(lon, lat), "buildings": nb, "cls": tile_class(tid),
                 "coastal": bool(coast.sum() >= tiles.COAST_MIN_CELLS), "split": "on-demand",
                 "z_median": float(np.median(z)), "center": [lon, lat], "corners": geo.tile_corners_lonlat(tid)}
     try:
@@ -208,9 +236,35 @@ def geocode(q: str, limit: int = 6):
         except Exception:
             pass
     for o in out:
-        o["tile_id"] = geo.tile_for_lonlat(o["lon"], o["lat"])
+        o["tile_id"] = geo.analysis_tile_for_lonlat(o["lon"], o["lat"])
         o["cell"] = geo.lonlat_to_cell(o["tile_id"], o["lon"], o["lat"])
     return {"results": out}
+
+
+@app.get("/point")
+def point_info(lon: float, lat: float):
+    """Everything known about a location without running a model: FEMA zone, ground, tile class."""
+    tid = geo.analysis_tile_for_lonlat(lon, lat)
+    out = {"lon": lon, "lat": lat, "tile_id": tid, "cell": geo.lonlat_to_cell(tid, lon, lat), "cls": tile_class(tid)}
+    try:
+        z = dem.load_tile(tid)
+        r, c = out["cell"]
+        out["ground_ft"] = round(float(z[r, c]) / geo.FT, 1)
+    except Exception:
+        out["ground_ft"] = None
+    try:
+        x, y = geo.lonlat_to_utm(lon, lat)
+        d = layers._get(f"{layers.LAYERS['fema']}/query", {
+            "geometry": f"{x},{y}", "geometryType": "esriGeometryPoint", "inSR": geo.UTM,
+            "spatialRel": "esriSpatialRelIntersects", "outFields": "FLD_ZONE,ZONE_SUBTY,STATIC_BFE,SFHA_TF",
+            "returnGeometry": "false", "f": "json"}, retries=4)
+        a = (d.get("features") or [{}])[0].get("attributes", {})
+        bfe = a.get("STATIC_BFE")
+        out["fema"] = {"zone": a.get("FLD_ZONE"), "subtype": a.get("ZONE_SUBTY"),
+                       "sfha": a.get("SFHA_TF") == "T", "bfe_ft": bfe if bfe and bfe > -9000 else None}
+    except Exception:
+        out["fema"] = None
+    return out
 
 
 @app.get("/presets")

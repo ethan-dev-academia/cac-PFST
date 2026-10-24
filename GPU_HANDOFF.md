@@ -13,8 +13,8 @@ Everything except training was built and tested on a laptop (PR #2, branch `pipe
 
 ## Goal and done criteria
 
-- `data/dataset/{train,test}/` holds about 3,000 scenarios (k = 0–2999, seed 2026) and `generate.log` shows no errors.
-- `models/fno.pt` exists, with best **held-out relative L2 of h_max below 0.10**. The held-out set is the 8 test tiles in `pfst/tiles.json`. IoU of the > 1 ft footprint and MAE are reported too.
+- `data/dataset/{train,test}/` holds about 3,000 scenarios (k = 0–2999, seed 2026, catalog `pfst/tiles.json` from coverage-v2) and `generate.log` shows no errors.
+- `models/fno.pt` exists, with best **held-out relative L2 of h_max below 0.10**. The held-out set is the 16 test tiles in `pfst/tiles.json`. IoU of the > 1 ft footprint and MAE are reported too.
 - Report back: the final metrics line, the epoch count, wall time, and the GPU used.
 
 ## Steps
@@ -32,11 +32,12 @@ pytest                              # 17 tests, ~3 min; all must pass before goi
 ```
 
 ### 2. Seed data (saves ~1.5 h)
-Download `seed_dataset_2026_k0-95.tgz` from the release
-https://github.com/ethan-dev-academia/cac-PFST/releases/tag/seed-dataset-2026-k0-95, then from the repo root run:
+**The tile catalog changed in coverage-v2** (126 tiles: every low-lying tile plus 24 higher-ground tiles, sampled coastal-first). The first seed release (`seed-dataset-2026-k0-95`) was made with the old 48-tile catalog and **must not be used**: scenario k would not match. Use the v2 seed release if it exists (`seed-dataset-v2-2026-k0-95`). Otherwise skip this step; the generator just makes those 96 itself.
+
+With the v2 archive, from the repo root run:
 ```bash
-gh release download seed-dataset-2026-k0-95 -p '*.tgz' -D data/   # or download it in a browser into data/
-tar -xzf data/seed_dataset_2026_k0-95.tgz -C data/                # creates data/dataset/{train,test}/s00000..s00095.npz
+gh release download seed-dataset-v2-2026-k0-95 -p '*.tgz' -D data/   # or download it in a browser into data/
+tar -xzf data/seed_dataset_v2_2026_k0-95.tgz -C data/                # creates data/dataset/{train,test}/s00000..s00095.npz
 ```
 
 ### 3. Generate the rest (CPU-bound, long-running)
@@ -82,7 +83,7 @@ curl -X POST localhost:8000/predict -H 'content-type: application/json' \
 
 ## Rules
 - **Do not modify** `floodsolver/`, `tests/test_solver.py` or `SOLVER_SPEC.md`. The spec is a binding contract; report problems instead of patching.
-- **Do not change** `--seed` (2026) or the scenario sampler in `pfst/generate.py` mid-run. Sample k is defined by `(seed, k)`, and mixing definitions corrupts the dataset.
+- **Do not change** `--seed` (2026), `pfst/tiles.json` or the scenario sampler in `pfst/generate.py` mid-run. Sample k is defined by `(seed, k)`, and mixing definitions corrupts the dataset.
 - Code changes, such as to training, go on a branch with a PR. Commits carry **no Co-Authored-By or "Generated with Claude" lines**.
 - Ask before deleting `data/dataset/` or anything else long-running.
 

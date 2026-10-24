@@ -16,8 +16,9 @@ export type Edit =
   | { type: "pond"; center: Cell; radius_m: number; depth_m: number }
   | { type: "road"; path: Cell[]; width_m: number; raise_m: number };
 
+export type TileClass = "coastal" | "low" | "higher" | "water" | "outside";
 export interface TileSummary {
-  id: string; place: string; buildings: number; coastal: boolean; split: string;
+  id: string; place: string; buildings: number; coastal: boolean; split: string; cls?: TileClass;
   center: [number, number]; corners: [number, number][];
 }
 export interface BandStats { homes_flagged: number; cells_over_1ft: number; area_over_1ft_acres: number; max_depth_ft: number }
@@ -33,6 +34,10 @@ export interface Running { status: "running" | "error"; job_id: string; elapsed_
 export interface Presets {
   return_periods: { years: number; rain_in: number; rain_lo_in: number; rain_hi_in: number }[];
   tide_ft: number; helene: { surge_ft: number; return_period: number; note: string };
+}
+export interface PointInfo {
+  tile_id: string; cell: Cell | null; cls: TileClass; ground_ft: number | null;
+  fema: { zone: string | null; subtype: string | null; sfha: boolean; bfe_ft: number | null } | null;
 }
 export interface GeocodeResult { label: string; lon: number; lat: number; tile_id: string; cell: Cell | null; source: string }
 
@@ -50,8 +55,10 @@ export const api = {
   health: () => j<{ ok: boolean; backend: string; info: any }>("/health"),
   tiles: () => j<{ tiles: TileSummary[] }>("/tiles"),
   presets: () => j<Presets>("/presets"),
+  point: (lon: number, lat: number) => j<PointInfo>(`/point?lon=${lon}&lat=${lat}`),
+  job: (key: string) => j<Prediction | Running>(`/jobs/${key}`),
   tileMeta: (tid: string) => j<TileSummary>(`/tiles/${tid}?light=true`),
-  tileAt: (lon: number, lat: number) => j<{ tile_id: string; cell: Cell | null }>(`/tiles/at?lon=${lon}&lat=${lat}`),
+  tileAt: (lon: number, lat: number) => j<{ tile_id: string; cell: Cell | null; cls: TileClass }>(`/tiles/at?lon=${lon}&lat=${lat}`),
   geocode: (q: string) => j<{ results: GeocodeResult[] }>(`/geocode?q=${encodeURIComponent(q)}`),
   imageryUrl: (tid: string) => `${API}/tiles/${tid}/imagery.jpg`,
 

@@ -70,3 +70,26 @@ def test_feature_channels():
     x = features.make_inputs(z, np.zeros_like(z), z < 0, 9.27, 7.62)
     assert x.shape == (features.N_IN, geo.N, geo.N) and x.dtype == np.float32
     assert np.allclose(x[3], 9.27 * rainfall.IN / 0.3)
+
+
+def test_half_lattice_analysis_tiles():
+    # any point lands in the central 640 m (cells 32..95) of its analysis tile
+    rng = np.random.default_rng(1)
+    for lon, lat in zip(rng.uniform(-82.79, -82.62, 50), rng.uniform(28.18, 28.43, 50)):
+        tid = geo.analysis_tile_for_lonlat(lon, lat)
+        r, c = geo.lonlat_to_cell(tid, lon, lat)
+        assert 31 <= r <= 96 and 31 <= c <= 96, (tid, r, c)
+    assert geo.parse_tile_id("E259.5N2444") == (259.5, 2444)
+    assert geo.tile_id(259.5, 2444) == "E259.5N2444" and geo.tile_id(259, 2444) == "E259N2444"
+    x0, _, x1, _ = geo.tile_bbox_utm("E259.5N2444")
+    assert x0 == 259.5 * geo.TILE_M and x1 - x0 == geo.TILE_M
+
+
+def test_catalog_weights_coastal_first():
+    cat = tiles.load_catalog()["tiles"]
+    by = {}
+    for t in cat:
+        by.setdefault(t["cls"], []).append(t)
+    assert set(by) == {"coastal", "low", "higher"}
+    assert by["coastal"][0]["weight"] > by["low"][0]["weight"] > by["higher"][0]["weight"]
+    assert any(t["split"] == "test" for t in cat) and any(t["split"] == "train" for t in cat)

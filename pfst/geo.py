@@ -4,6 +4,10 @@ Tiles are 128 x 128 cells of 10 m on a fixed UTM 17N (EPSG:26917) grid, so any
 point in the county maps to exactly one tile id. Tile "E258N2444" covers
 x in [258*1280, 259*1280), y in [2444*1280, 2445*1280). Array row 0 is the
 northern edge (SOLVER_SPEC §1).
+
+Overlapping analysis tiles: ids may sit on a half-tile (640 m) lattice, e.g.
+"E259.5N2444". `analysis_tile_for_lonlat` returns the lattice tile whose centre is
+nearest a point, so that point is always >= 320 m from the tile's (modeled) edges.
 """
 from functools import lru_cache
 
@@ -30,18 +34,41 @@ def utm_to_lonlat(x, y):
     return _tf(UTM, 4326).transform(x, y)
 
 
+def _fmt(v):
+    v = float(v)
+    if abs(v * 2 - round(v * 2)) > 1e-9:
+        raise ValueError(f"tile index {v} is not on the half-tile lattice")
+    return str(int(v)) if v == int(v) else f"{v:.1f}"
+
+
 def tile_id(ix, iy):
-    return f"E{ix}N{iy}"
+    return f"E{_fmt(ix)}N{_fmt(iy)}"
 
 
 def parse_tile_id(tid):
+    """(ix, iy) in tile units; ints for base tiles, x.5 for half-offset tiles."""
     e, n = tid[1:].split("N")
-    return int(e), int(n)
+    ix, iy = float(e), float(n)
+    _fmt(ix), _fmt(iy)
+    return (int(ix) if ix == int(ix) else ix), (int(iy) if iy == int(iy) else iy)
 
 
 def tile_for_lonlat(lon, lat):
     x, y = lonlat_to_utm(lon, lat)
     return tile_id(int(x // TILE_M), int(y // TILE_M))
+
+
+def analysis_tile_for_lonlat(lon, lat):
+    """Half-lattice tile centred nearest (lon, lat): the point sits in its central 640 m."""
+    x, y = lonlat_to_utm(lon, lat)
+    half = TILE_M / 2
+    return tile_id((round(x / half) - 1) / 2, (round(y / half) - 1) / 2)
+
+
+def base_tile_of(tid):
+    """Base (integer-grid) tile containing the centre of `tid`."""
+    x0, y0, x1, y1 = tile_bbox_utm(tid)
+    return tile_id(int(((x0 + x1) / 2) // TILE_M), int(((y0 + y1) / 2) // TILE_M))
 
 
 def tile_bbox_utm(tid):

@@ -15,6 +15,10 @@
   #legend .ticks { display: flex; justify-content: space-between; }
   .maplibregl-popup-content { background: var(--glass); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(12px); font-size: 12px; padding: 10px 12px; }
   .maplibregl-popup-tip { display: none; }
+  .hov .maplibregl-popup-content { pointer-events: none; }
+  #classes { position: absolute; right: 12px; bottom: 28px; padding: 9px 11px; font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+  #classes i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  @media (max-width: 760px) { #classes { display: none; } }
   .maplibregl-ctrl-attrib { background: rgba(5,11,22,.6) !important; color: #6d84a6; font-size: 10px; }
   .maplibregl-ctrl-attrib a { color: #8aa2c2; }
   .pin { width: 22px; height: 22px; border-radius: 50%; background: var(--bad); border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(255,84,104,.35), 0 6px 18px rgba(0,0,0,.5); animation: pulse 1.8s ease-out infinite; }
@@ -23,6 +27,11 @@
 </head>
 <body>
 <div id="map"></div>
+<div id="classes" class="glass">
+  <div><i style="background:rgba(76,195,255,.6)"></i>Coastal low-lying</div>
+  <div><i style="background:rgba(64,110,255,.6)"></i>Low-lying inland</div>
+  <div><i style="background:rgba(150,190,140,.35)"></i>Higher ground</div>
+</div>
 <div id="legend" class="glass"><div>Max flood depth (mean)</div><div class="bar"></div>
   <div class="ticks"><span>0</span><span>0.5</span><span>1 ft</span><span>2</span><span>3+</span><span>6.5</span></div></div>
 <script src="common.js"></script>
@@ -57,12 +66,14 @@ const map = new maplibregl.Map({
   },
 });
 map.on("error", (e) => console.warn("map error", e.error?.message || e));
-if (innerWidth > 760) map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
+if (innerWidth > 760) map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+document.head.insertAdjacentHTML("beforeend", "<style>.maplibregl-ctrl-top-right{top:70px}</style>");
 
 const empty = { type: "FeatureCollection", features: [] };
 map.on("load", async () => {
   if (PF.params.get("terrain") !== "0") map.setTerrain({ source: "dem", exaggeration: 4 });
-  map.addSource("tiles", { type: "geojson", data: empty });
+  map.addSource("grid", { type: "geojson", data: empty });
+  map.addSource("sel", { type: "geojson", data: empty });
   map.addSource("observed", { type: "geojson", data: empty });
   map.addSource("swfwmd", { type: "geojson", data: empty });
   map.addSource("buildings", { type: "geojson", data: empty });
@@ -73,12 +84,17 @@ map.on("load", async () => {
                  paint: { "fill-color": "#ff5468", "fill-opacity": 0.28 } });
   map.addLayer({ id: "observed-line", type: "line", source: "observed", layout: { visibility: "none" },
                  paint: { "line-color": "#ff8a98", "line-width": 1.2 } });
-  map.addLayer({ id: "tiles-fill", type: "fill", source: "tiles",
-                 paint: { "fill-color": ["case", ["boolean", ["feature-state", "sel"], false], "rgba(76,195,255,0.0)", "rgba(76,195,255,0.18)"],
-                          "fill-outline-color": "rgba(76,195,255,0.5)" } });
-  map.addLayer({ id: "tiles-line", type: "line", source: "tiles",
-                 paint: { "line-color": ["case", ["boolean", ["feature-state", "sel"], false], "#ffffff", "rgba(76,195,255,0.7)"],
-                          "line-width": ["case", ["boolean", ["feature-state", "sel"], false], 2.4, 1.4], "line-dasharray": [2, 1] } });
+  // every tile in the county is drawn and classified: nothing on land is blank
+  const CLS_FILL = ["match", ["get", "cls"], "coastal", "rgba(76,195,255,0.30)", "low", "rgba(64,110,255,0.26)",
+                    "higher", "rgba(150,190,140,0.16)", "rgba(0,0,0,0)"];
+  const CLS_LINE = ["match", ["get", "cls"], "coastal", "rgba(120,215,255,0.55)", "low", "rgba(120,150,255,0.45)",
+                    "higher", "rgba(180,210,170,0.32)", "rgba(0,0,0,0)"];
+  map.addLayer({ id: "grid-fill", type: "fill", source: "grid", paint: { "fill-color": CLS_FILL } });
+  map.addLayer({ id: "grid-line", type: "line", source: "grid", paint: { "line-color": CLS_LINE, "line-width": 0.6 } });
+  map.addLayer({ id: "grid-hover", type: "line", source: "grid", filter: ["==", ["get", "id"], ""],
+                 paint: { "line-color": "#ffffff", "line-width": 1.6, "line-opacity": 0.8 } });
+  map.addLayer({ id: "sel-line", type: "line", source: "sel",
+                 paint: { "line-color": "#ffffff", "line-width": 2.4, "line-dasharray": [2, 1.2] } });
   map.addLayer({ id: "buildings", type: "fill-extrusion", source: "buildings", minzoom: 13,
                  paint: { "fill-extrusion-color": ["case", [">", ["get", "d"], 0.3048], "#ff5468", [">", ["get", "d"], 0.05], "#ffb547", "#e9eef7"],
                           "fill-extrusion-height": ["case", [">", ["get", "d"], 0.3048], 9, 6],
@@ -88,13 +104,7 @@ map.on("load", async () => {
   map.addLayer({ id: "edits-line", type: "line", source: "edits",
                  paint: { "line-color": "#3ee6a8", "line-width": ["case", ["==", ["geometry-type"], "LineString"], 6, 2] } });
 
-  try {
-    const cat = await PF.getJSON("/tiles");
-    S.tiles = cat.tiles;
-    map.getSource("tiles").setData({ type: "FeatureCollection", features: cat.tiles.map((t, i) => ({
-      type: "Feature", id: i, properties: { id: t.id, place: t.place, buildings: t.buildings },
-      geometry: { type: "Polygon", coordinates: [[...t.corners, t.corners[0]]] } })) });
-  } catch (e) { console.warn(e); }
+  PF.getJSON("/grid").then((g) => map.getSource("grid").setData(g)).catch((e) => console.warn(e));
   // countywide observed-flooding polygons straight from the county service (small layer)
   fetch(`${ORG}/PascoMapper_Storm/FeatureServer/6/query?where=1%3D1&outFields=*&outSR=4326&f=geojson`)
     .then((r) => r.json()).then((g) => map.getSource("observed").setData(g)).catch(() => {});
@@ -103,16 +113,17 @@ map.on("load", async () => {
   const rk = PF.params.get("result"); if (rk) showResult(rk).catch(() => {});
 });
 
-function featIndex(id) { return S.tiles.findIndex((t) => t.id === id); }
-let selIdx = -1;
 async function selectTile(tid, fly = true) {
-  if (selIdx >= 0) map.setFeatureState({ source: "tiles", id: selIdx }, { sel: false });
-  selIdx = featIndex(tid);
-  if (selIdx >= 0) map.setFeatureState({ source: "tiles", id: selIdx }, { sel: true });
+  if (!tid) {  // deselect
+    S.tile = null; S.corners = null; S.result = null; S.depth = null; clearOverlay();
+    map.getSource("sel").setData(empty); map.getSource("buildings").setData(empty); return;
+  }
   if (S.tile !== tid) {
     S.tile = tid; S.result = null; S.depth = null; clearOverlay();
-    const meta = S.tiles[selIdx] || (await PF.getJSON(`/tiles/${tid}`));
+    const meta = await PF.getJSON(`/tiles/${tid}?light=true`);
+    if (S.tile !== tid) return;
     S.corners = meta.corners;
+    map.getSource("sel").setData({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...S.corners, S.corners[0]]] } });
     PF.getJSON(`/tiles/${tid}/buildings`).then((g) => { S.bfc = g; colorBuildings(); }).catch(() => {});
     PF.getJSON(`/tiles/${tid}/layers/swfwmd_100yr`).then((g) => map.getSource("swfwmd").setData(g)).catch(() => {});
   }
@@ -125,6 +136,7 @@ async function selectTile(tid, fly = true) {
 }
 
 function padding() {
+  if (S.pad) return S.pad;
   const w = innerWidth, h = innerHeight, wide = w > 760;
   return wide ? { top: 80, bottom: 60, left: Math.min(500, w * 0.38), right: 40 }
               : { top: Math.min(80, h * 0.12), bottom: Math.min(300, h * 0.42), left: 20, right: 20 };
@@ -198,21 +210,34 @@ map.on("click", (e) => {
       PF.send(info); return;
     }
   }
-  const f = map.queryRenderedFeatures(e.point, { layers: ["tiles-fill"] })[0];
-  if (f) { PF.send({ type: "selectTile", tile_id: f.properties.id }); selectTile(f.properties.id); return; }
-  PF.send({ type: "tapOutside", lonlat: [lng, lat] });
+  const f = map.queryRenderedFeatures(e.point, { layers: ["grid-fill"] })[0];
+  PF.send({ type: "tapOutside", lonlat: [lng, lat], cls: f ? f.properties.cls : "outside" });
 });
-map.on("mousemove", "tiles-fill", () => (map.getCanvas().style.cursor = "pointer"));
-map.on("mouseleave", "tiles-fill", () => (map.getCanvas().style.cursor = ""));
+// hover card for the county grid (desktop)
+const hover = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 14, className: "hov" });
+const CLS_TXT = { coastal: "Coastal low-lying · surge + rain", low: "Low-lying inland · rain flooding",
+                  higher: "Higher ground · lower exposure", water: "Open water" };
+map.on("mousemove", "grid-fill", (e) => {
+  const p = e.features[0].properties;
+  map.getCanvas().style.cursor = "pointer";
+  map.setFilter("grid-hover", ["==", ["get", "id"], p.id]);
+  const z10 = p.z10 != null && p.z10 !== "null" ? " · low ground " + (p.z10 / 0.3048).toFixed(0) + " ft" : "";
+  hover.setLngLat(e.lngLat).setHTML("<b>" + (CLS_TXT[p.cls] || p.cls) + "</b><br><span style='color:#8aa2c2'>"
+    + (+p.b || 0).toLocaleString() + " buildings" + z10 + "</span><br><span style='color:#5b7192'>Click to analyze here</span>").addTo(map);
+});
+map.on("mouseleave", "grid-fill", () => { map.getCanvas().style.cursor = ""; map.setFilter("grid-hover", ["==", ["get", "id"], ""]); hover.remove(); });
 
-const LAYER_IDS = { fema: ["fema"], observed: ["observed", "observed-line"], swfwmd: ["swfwmd"], buildings: ["buildings"] };
+const LAYER_IDS = { fema: ["fema"], observed: ["observed", "observed-line"], swfwmd: ["swfwmd"], buildings: ["buildings"], grid: ["grid-fill", "grid-line"] };
 // messages can arrive before the style has loaded; queue them until then
 let styleReady = false;
 const pending = [];
 map.on("load", () => { styleReady = true; setTimeout(() => pending.splice(0).forEach(handle), 0); });
 PF.onMessage((m) => (styleReady ? handle(m) : pending.push(m)));
 async function handle(m) {
-  if (m.type === "load" && m.tile_id) selectTile(m.tile_id, m.fly !== false);
+  if (m.type === "load") selectTile(m.tile_id || null, m.fly !== false);
+  if (m.type === "flyTo" && m.lonlat) map.flyTo({ center: m.lonlat, zoom: m.zoom || 15.5, pitch: 55, duration: 2000, essential: true });
+  if (m.type === "home") map.flyTo({ center: [-82.72, 28.29], zoom: 10.4, pitch: 45, bearing: -10, duration: 1800 });
+  if (m.type === "padding") { S.pad = m.pad; }
   if (m.type === "result" && m.key) showResult(m.key);
   if (m.type === "clear") { S.result = null; S.depth = null; clearOverlay(); colorBuildings(); }
   if (m.type === "edits") { S.edits = m.edits || []; drawEdits(); }

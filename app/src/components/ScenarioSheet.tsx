@@ -6,9 +6,9 @@ import { Slider } from "./Slider";
 const RPS = [2, 10, 25, 100];
 const HELENE = 7.62;
 
-interface Props { onRun: () => void; onReport: () => void; onShow: (which: "baseline" | "project") => void; compact: boolean }
+interface Props { onRun: () => void; onReport: () => void; onShow: (which: "baseline" | "project") => void; compact: boolean; docked?: boolean }
 
-export function ScenarioSheet({ onRun, onReport, onShow, compact }: Props) {
+export function ScenarioSheet({ onRun, onReport, onShow, compact, docked }: Props) {
   const st = useStore();
   const open = st.sheetOpen;
   const setOpen = (v: boolean) => st.set({ sheetOpen: v });
@@ -19,27 +19,35 @@ export function ScenarioSheet({ onRun, onReport, onShow, compact }: Props) {
   const b = st.baseline?.stats, p = st.project?.stats;
   const removed = b && p ? b.mean.homes_flagged - p.mean.homes_flagged : null;
 
+  const frame = docked ? s.docked : [s.sheet, compact && { maxHeight: "58%" }];
   if (!st.tileId) {
     return (
-      <View style={[s.sheet, s.hint]}>
-        <Text style={s.h1}>Where does each dollar remove the most water?</Text>
-        <Text style={s.body}>Tap a highlighted neighborhood tile, or search an address, to screen flood depth under design storms and Helene-scale surge.</Text>
+      <View style={[frame, s.hint]}>
+        <Text style={s.kick}>EXPLORE</Text>
+        <Text style={s.h1}>Tap anywhere on the map</Text>
+        <Text style={s.body}>The whole county is covered. Blue tiles are low-lying ground where floods start; green tiles are higher ground. A tap models the 1.3 km square centred on that spot, so the place you care about is never at a model edge.</Text>
+        <View style={s.legend}>
+          {[["rgba(76,195,255,0.8)", "Coastal low-lying"], ["rgba(64,110,255,0.8)", "Low-lying inland"], ["rgba(150,190,140,0.6)", "Higher ground"]].map(([c, t]) => (
+            <View key={t} style={s.legendRow}><View style={[s.legendSw, { backgroundColor: c }]} /><Text style={s.small}>{t}</Text></View>
+          ))}
+        </View>
         <Text style={s.note}>Screening-grade · not a replacement for engineering models</Text>
       </View>
     );
   }
+  const clsLabel = tile?.cls === "coastal" ? "Coastal low-lying" : tile?.cls === "low" ? "Low-lying inland" : tile?.cls === "higher" ? "Higher ground" : null;
   return (
-    <View style={[s.sheet, compact && { maxHeight: "58%" }]}>
-      <Pressable onPress={() => setOpen(!open)} style={s.grab}><View style={s.grabber} /></Pressable>
+    <View style={frame}>
+      {!docked && <Pressable onPress={() => setOpen(!open)} style={s.grab}><View style={s.grabber} /></Pressable>}
       <View style={s.headRow}>
         <View style={{ flex: 1 }}>
           <Text style={s.h1}>{tile?.place ?? "Tile"} <Text style={s.dim}>· {st.tileId}</Text></Text>
-          <Text style={s.small}>{tile ? `${tile.buildings.toLocaleString()} buildings · ` : ""}
+          <Text style={s.small}>{clsLabel ? `${clsLabel} · ` : ""}{tile ? `${tile.buildings.toLocaleString()} buildings · ` : ""}
             {st.backend === "fno" ? "Neural operator · instant, 30-member ensemble" : "Physics solver · ~2 min per scenario (no model loaded)"}</Text>
         </View>
       </View>
-      {open && (
-        <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 14, paddingBottom: 4 }} showsVerticalScrollIndicator={false}>
+      {(open || docked) && (
+        <ScrollView style={docked ? { flex: 1 } : { flexGrow: 0 }} contentContainerStyle={{ gap: 14, paddingBottom: 4 }} showsVerticalScrollIndicator={false}>
           <View>
             <Text style={s.label}>Design storm <Text style={s.dim}>· NOAA Atlas 14, 24-hr</Text></Text>
             <View style={s.chips}>
@@ -103,7 +111,7 @@ export function ScenarioSheet({ onRun, onReport, onShow, compact }: Props) {
           </View>
 
           <View style={s.chips}>
-            {([["fema", "FEMA zones"], ["observed", "Observed flooding"], ["swfwmd", "SWFWMD 100-yr"], ["buildings", "3D buildings"]] as const).map(([k, label]) => (
+            {([["grid", "County tiles"], ["fema", "FEMA zones"], ["observed", "Observed flooding"], ["swfwmd", "SWFWMD 100-yr"], ["buildings", "3D buildings"]] as const).map(([k, label]) => (
               <Pressable key={k} onPress={() => st.set({ layers: { ...st.layers, [k]: !st.layers[k] } })} style={[s.tog, st.layers[k] && s.togOn]}>
                 <Text style={[s.togT, st.layers[k] && { color: C.ink }]}>{label}</Text>
               </Pressable>
@@ -159,6 +167,11 @@ const s = StyleSheet.create({
            borderRadius: R.lg, backgroundColor: C.panel, borderWidth: 1, borderColor: C.line, maxHeight: "78%",
            shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 24, elevation: 12 },
   hint: { paddingTop: 16, gap: 8 },
+  docked: { flex: 1, padding: 18, gap: 12 },
+  kick: { color: C.accent, fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
+  legend: { gap: 6, marginTop: 4 },
+  legendRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  legendSw: { width: 14, height: 14, borderRadius: 3 },
   grab: { alignItems: "center", paddingVertical: 6 },
   grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)" },
   headRow: { flexDirection: "row", alignItems: "center" },

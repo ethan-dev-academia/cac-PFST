@@ -1,10 +1,11 @@
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from "react-native";
 import { API, api, Edit, GeocodeResult, Prediction } from "./src/api";
 import { ScenarioSheet } from "./src/components/ScenarioSheet";
 import { SearchBar } from "./src/components/SearchBar";
 import { VizFrame, VizHandle } from "./src/components/VizFrame";
+import { Welcome } from "./src/components/Welcome";
 import { AboutScreen } from "./src/screens/AboutScreen";
 import { addPlace, HomeScreen } from "./src/screens/HomeScreen";
 import { PlaceScreen } from "./src/screens/PlaceScreen";
@@ -26,10 +27,18 @@ const TABS: { key: Tab; label: string; icon: IconName; on: IconName }[] = [
 const PANEL_W = 420;
 const RAIL_W = 76;
 
+// persisted state loads asynchronously; wait for it so returning users skip the welcome
+function useHydrated() {
+  const [h, setH] = useState(useStore.persist.hasHydrated());
+  useEffect(() => useStore.persist.onFinishHydration(() => setH(true)), []);
+  return h;
+}
+
 export default function App() {
   const st = useStore();
   const { width, height } = useWindowDimensions();
   const wide = width >= 900;
+  const hydrated = useHydrated();
   const mapRef = useRef<VizHandle>(null);
   const xRef = useRef<VizHandle>(null);
   const both = (m: object) => { mapRef.current?.post(m); xRef.current?.post(m); };
@@ -235,6 +244,8 @@ export default function App() {
       {st.apiOk === false && (
         <View style={s.banner}><Icon name="cloud-offline-outline" size={16} color={C.bad} /><Text style={s.bannerT}>{st.error}</Text></View>
       )}
+
+      {!st.seenIntro && hydrated && <Welcome />}
 
       {/* report draws over everything so the visual frames (and their WebGL state) stay alive */}
       {st.screen === "report" && <View style={[StyleSheet.absoluteFill, { zIndex: 50 }]}><ReportScreen /></View>}

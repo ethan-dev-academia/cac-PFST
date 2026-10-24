@@ -45,7 +45,9 @@ export function ReportScreen() {
   async function exportPdf() {
     setBusy(true); setMsg(null);
     try {
-      const html = memoHtml({ tile, tileId: st.tileId!, baseline: b!, project: p, imagery: await toDataUri(imagery) });
+      const pr = st.tab === "plan" ? st.projects.find((x) => x.id === st.activeProjectId) : null;
+      const html = memoHtml({ tile, tileId: st.tileId!, baseline: b!, project: p, imagery: await toDataUri(imagery),
+                              meta: pr ? { name: pr.name, costUsd: pr.costUsd } : null });
       if (Platform.OS === "web") {
         const w = window.open("", "_blank");
         if (!w) throw new Error("allow pop-ups to export the memo");

@@ -155,7 +155,7 @@ function ProjectEditor({ p, onRunDone, onShow }: { p: Project; onRunDone: () => 
             <Text style={T.small}>Estimated cost (edit to your bid)</Text>
             <View style={s.costRow}>
               <Text style={s.costDollar}>$</Text>
-              <TextInput style={s.costInput} keyboardType="numeric" value={p.costUsd ? String(p.costUsd) : ""} placeholder={String(est)}
+              <TextInput style={s.costInput} keyboardType="numeric" value={p.costUsd ? p.costUsd.toLocaleString("en-US") : ""} placeholder={est.toLocaleString("en-US")}
                 placeholderTextColor={C.faint} onChangeText={(t) => save({ costUsd: Number(t.replace(/[^0-9]/g, "")) || 0 })} />
             </View>
             <Text style={T.faint}>Planning estimate {money(est)}: ponds ≈ $40/yd³ excavated +30%; road raising ≈ $4M/mile per 2 ft.</Text>

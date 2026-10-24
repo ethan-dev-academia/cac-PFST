@@ -9,8 +9,9 @@ function storm(p: Prediction) {
   return sc.surge_ft > 0.7 ? `${rain} with ${sc.surge_ft.toFixed(1)} ft surge` : rain;
 }
 
-export function memoHtml(opts: { tile?: TileSummary; tileId: string; baseline: Prediction; project: Prediction | null; imagery: string | null }) {
-  const { tile, tileId, baseline: b, project: p, imagery } = opts;
+export function memoHtml(opts: { tile?: TileSummary; tileId: string; baseline: Prediction; project: Prediction | null; imagery: string | null;
+                                 meta?: { name: string; costUsd: number } | null }) {
+  const { tile, tileId, baseline: b, project: p, imagery, meta } = opts;
   const bs = b.stats, ps = p?.stats;
   const removed = ps ? bs.mean.homes_flagged - ps.mean.homes_flagged : null;
   const removedLo = ps ? bs.p10.homes_flagged - ps.p10.homes_flagged : null;
@@ -45,13 +46,14 @@ export function memoHtml(opts: { tile?: TileSummary; tileId: string; baseline: P
     ul { margin: 4px 0 0 18px; padding: 0; }
     .fine { font-family: Helvetica, Arial, sans-serif; font-size: 7.5pt; color: #555; margin-top: 12px; border-top: 1px solid #bbb; padding-top: 6px; }
   </style></head><body>
-    <div class="hdr"><h1>MEMORANDUM — Flood Screening Result</h1></div>
+    <div class="hdr"><h1>MEMORANDUM — Flood Screening Result${meta ? ": " + esc(meta.name) : ""}</h1></div>
     <div class="meta">
       <b>TO</b><span>Pasco County Stormwater Planning</span>
       <b>DATE</b><span>${date}</span>
       <b>AREA</b><span>${esc(tile?.place ?? "")} — tile ${tileId} (1.28 km × 1.28 km, 10 m cells)</span>
       <b>EVENT</b><span>${esc(storm(b))}</span>
       <b>PROJECT</b><span>${edits.length ? esc(edits.join("; ")) : "None — baseline conditions only"}</span>
+      ${meta && meta.costUsd ? `<b>COST</b><span>$${meta.costUsd.toLocaleString("en-US")} (planning estimate)${removed && removed > 0 ? ` — $${Math.round(meta.costUsd / removed).toLocaleString("en-US")} per home removed from &gt; 1 ft flooding` : ""}</span>` : ""}
     </div>
     <div class="kpis">
       <div class="kpi"><div class="n">${bs.mean.homes_flagged}</div><div class="l">homes with &gt; 1 ft of water, baseline (band ${bs.p10.homes_flagged}–${bs.p90.homes_flagged} of ${bs.homes_total})</div></div>

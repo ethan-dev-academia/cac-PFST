@@ -74,11 +74,11 @@ map.on("load", async () => {
   map.addLayer({ id: "observed-line", type: "line", source: "observed", layout: { visibility: "none" },
                  paint: { "line-color": "#ff8a98", "line-width": 1.2 } });
   map.addLayer({ id: "tiles-fill", type: "fill", source: "tiles",
-                 paint: { "fill-color": ["case", ["boolean", ["feature-state", "sel"], false], "rgba(76,195,255,0.0)", "rgba(76,195,255,0.10)"],
+                 paint: { "fill-color": ["case", ["boolean", ["feature-state", "sel"], false], "rgba(76,195,255,0.0)", "rgba(76,195,255,0.18)"],
                           "fill-outline-color": "rgba(76,195,255,0.5)" } });
   map.addLayer({ id: "tiles-line", type: "line", source: "tiles",
                  paint: { "line-color": ["case", ["boolean", ["feature-state", "sel"], false], "#ffffff", "rgba(76,195,255,0.7)"],
-                          "line-width": ["case", ["boolean", ["feature-state", "sel"], false], 2.2, 1], "line-dasharray": [2, 1] } });
+                          "line-width": ["case", ["boolean", ["feature-state", "sel"], false], 2.4, 1.4], "line-dasharray": [2, 1] } });
   map.addLayer({ id: "buildings", type: "fill-extrusion", source: "buildings", minzoom: 13,
                  paint: { "fill-extrusion-color": ["case", [">", ["get", "d"], 0.3048], "#ff5468", [">", ["get", "d"], 0.05], "#ffb547", "#e9eef7"],
                           "fill-extrusion-height": ["case", [">", ["get", "d"], 0.3048], 9, 6],
@@ -140,8 +140,11 @@ function colorBuildings() {
   S.bfc.features.forEach((f) => (f.properties.d = d ? d[f.properties.k] : 0));
   map.getSource("buildings").setData(S.bfc);
 }
+let showSeq = 0;
 async function showResult(key) {
+  const my = ++showSeq;   // overlapping calls (app re-posts on "ready"): only the latest one draws
   const r = await PF.getJSON(`/jobs/${key}`);
+  if (my !== showSeq) return;
   if (r.status !== "done") return;
   if (r.tile_id !== S.tile) await selectTile(r.tile_id, true);
   S.result = r; S.depth = PF.mm(r.grids.mean);
@@ -150,6 +153,8 @@ async function showResult(key) {
   // black (MapLibre 5.24, D3D11 and SwiftShader). The PNG is already 4x nearest-upscaled server-side.
   const img = new Image(); img.crossOrigin = "anonymous"; img.src = `${PF.api}/jobs/${key}/overlay.png`;
   await img.decode();
+  if (my !== showSeq) return;
+  clearOverlay();
   let cv = document.getElementById("depthcv");
   if (!cv) { cv = document.createElement("canvas"); cv.id = "depthcv"; cv.style.display = "none"; document.body.appendChild(cv); }
   cv.width = img.width; cv.height = img.height;
@@ -201,7 +206,12 @@ map.on("mousemove", "tiles-fill", () => (map.getCanvas().style.cursor = "pointer
 map.on("mouseleave", "tiles-fill", () => (map.getCanvas().style.cursor = ""));
 
 const LAYER_IDS = { fema: ["fema"], observed: ["observed", "observed-line"], swfwmd: ["swfwmd"], buildings: ["buildings"] };
-PF.onMessage(async (m) => {
+// messages can arrive before the style has loaded; queue them until then
+let styleReady = false;
+const pending = [];
+map.on("load", () => { styleReady = true; setTimeout(() => pending.splice(0).forEach(handle), 0); });
+PF.onMessage((m) => (styleReady ? handle(m) : pending.push(m)));
+async function handle(m) {
   if (m.type === "load" && m.tile_id) selectTile(m.tile_id, m.fly !== false);
   if (m.type === "result" && m.key) showResult(m.key);
   if (m.type === "clear") { S.result = null; S.depth = null; clearOverlay(); colorBuildings(); }
@@ -214,7 +224,7 @@ PF.onMessage(async (m) => {
     map.flyTo({ center: m.lonlat, zoom: 16.3, pitch: 62, duration: 2400, essential: true });
   }
   if (m.type === "terrain") map.setTerrain(m.on ? { source: "dem", exaggeration: m.exaggeration || 4 } : null);
-});
+}
 </script>
 </body>
 </html>

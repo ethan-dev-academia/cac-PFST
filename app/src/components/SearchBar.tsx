@@ -9,7 +9,9 @@ export function SearchBar({ onPick }: { onPick: (r: GeocodeResult) => void }) {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const seq = useRef(0);
+  const picked = useRef<string | null>(null);
   useEffect(() => {
+    if (q === picked.current) return;          // the label we just filled in: don't search again
     if (q.trim().length < 4) { setRes([]); return; }
     const id = ++seq.current;
     const t = setTimeout(async () => {
@@ -27,7 +29,7 @@ export function SearchBar({ onPick }: { onPick: (r: GeocodeResult) => void }) {
       <View style={s.bar}>
         <Text style={s.icon}>⌕</Text>
         <TextInput
-          style={s.input} value={q} onChangeText={setQ} onFocus={() => setOpen(true)}
+          style={s.input} value={q} onChangeText={(t) => { picked.current = null; setQ(t); }} onFocus={() => setOpen(true)}
           placeholder="Search a Pasco address — e.g. 5919 Main St" placeholderTextColor={C.faint}
           autoCorrect={false} returnKeyType="search" onSubmitEditing={() => res[0] && pick(res[0])}
         />
@@ -47,7 +49,7 @@ export function SearchBar({ onPick }: { onPick: (r: GeocodeResult) => void }) {
       )}
     </View>
   );
-  function pick(r: GeocodeResult) { setOpen(false); setQ(r.label); onPick(r); }
+  function pick(r: GeocodeResult) { picked.current = r.label; seq.current++; setOpen(false); setRes([]); setQ(r.label); onPick(r); }
 }
 
 const s = StyleSheet.create({

@@ -42,7 +42,12 @@
   body.embed #title { display: none; }
   body.embed #legend { left: auto; right: 12px; bottom: auto; top: 108px; }
   body.embed #time { bottom: auto; top: 12px; left: 50%; }
-  @media (max-width: 760px) { body.embed #hud { top: 66px; } body.embed #legend { top: 162px; } body.embed #time { top: 66px; left: 12px; transform: none; } }
+  @media (max-width: 760px) {
+    body.embed #time { top: 66px; left: 12px; right: 12px; transform: none; }
+    body.embed #time input { width: auto; flex: 1; }
+    body.embed #hud { top: 118px; }
+    body.embed #legend { top: 214px; }
+  }
   @media (max-width: 560px) { #title { display: none; } #legend { min-width: 0; right: 12px; } input[type=range] { width: 90px; } }
 </style>
 </head>

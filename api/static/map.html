@@ -57,7 +57,7 @@ const map = new maplibregl.Map({
   },
 });
 map.on("error", (e) => console.warn("map error", e.error?.message || e));
-map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+if (innerWidth > 760) map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 
 const empty = { type: "FeatureCollection", features: [] };
 map.on("load", async () => {

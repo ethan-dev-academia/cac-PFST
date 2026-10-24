@@ -11,13 +11,16 @@ Pasco Flood Screening Tool: a numpy overland-flow solver generates synthetic run
 ## Conventions
 
 - Solver units are SI internally. mm/hr and ft conversions happen only in I/O helpers.
+- DEM from the SWFWMD server is in **US feet** (NAVD88). Convert to metres before the solver. Endpoints and gotchas are in `DATA_SOURCES.md`.
 - Arrays are `(ny, nx)`, row 0 = north. The grid is 128×128 at 10 m.
 - Diagnostic scripts go in `diagnostics/`, are committed, and have a one-line header saying what they check.
 - Tests: `pytest` (run from the repo root; `pythonpath = ["."]` is set in `pyproject.toml`).
 
-## Planned components (not yet built)
+## Layout and run
 
-- Dataset generation: ~3k scenarios → `.npz`
-- FNO training (`neuraloperator`, mass-balance loss term, target rel-L2 < 10%)
-- `api/`: FastAPI `POST /predict`, ensemble → mean/p10/p90, server-side PNG colormap
-- `app/`: Expo, react-native-maps or `@rnmapbox/maps`, Zustand. Screens: Map (3D depth layer, FEMA toggle, address lookup), Scenario, Report (expo-print PDF)
+- `pfst/` data pipeline, `training/` FNO, `api/` FastAPI (+ `api/static/` MapLibre and three.js pages), `app/` Expo. See README "Running it".
+- Tests: `pytest` (solver contract + offline pipeline tests). App: `cd app && npx tsc --noEmit`.
+- The visual layer is plain HTML served by the API at `/viz`. The app embeds it (WebView native, iframe web) and talks over postMessage (`api/static/common.js`). Visual changes go in `api/static/`, not in React Native.
+- MapLibre gotcha: `raster-resampling: "nearest"` renders RGBA image/canvas overlays black. Don't use it.
+- `data/` and `models/` are generated and git-ignored. The dataset is deterministic in `(seed, k)`.
+- `app/AGENTS.md`: check versioned Expo docs (SDK 58) before touching Expo APIs.

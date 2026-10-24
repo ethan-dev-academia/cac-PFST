@@ -71,7 +71,7 @@ cd app && npm install && npx expo start           # w = web/desktop; scan the QR
 - **Phones:** the app looks for the API on the same machine as the Expo dev server, at port 8000. Otherwise set `EXPO_PUBLIC_API_URL=http://<lan-ip>:8000`.
 - **Expo Go:** everything used (WebView, print, sharing) ships in Expo Go, so no dev build is needed.
 
-**Training** (GPU machine): see [`training/README.md`](training/README.md). Generate the dataset, smoke test, then train. Drop `models/fno.pt` next to the API and `/health` switches from `solver` to `fno`.
+**Training** (GPU machine): start with [`GPU_HANDOFF.md`](GPU_HANDOFF.md), then [`training/README.md`](training/README.md). Generate the dataset, smoke test, then train. Drop `models/fno.pt` next to the API and `/health` switches from `solver` to `fno`.
 
 ## Repo layout
 

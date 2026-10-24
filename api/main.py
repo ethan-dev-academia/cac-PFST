@@ -273,17 +273,19 @@ def _scenario_edits(req):
     return out
 
 
-def _stats(h, z, tid):
+def _stats(h, z, tid, dz):
     try:
         r, c, _ = layers.building_cells(tid)
     except Exception:
         r = c = np.zeros(0, int)
+    flood = dz >= 0  # water standing in an excavated pond is storage, not flooding
     out = {}
     for k in ("p10", "mean", "p90"):
+        over = (h[k] > FT1) & flood
         out[k] = {"homes_flagged": int((h[k][r, c] > FT1).sum()) if len(r) else 0,
-                  "cells_over_1ft": int((h[k] > FT1).sum()),
-                  "area_over_1ft_acres": round(float((h[k] > FT1).sum()) * geo.DX ** 2 / 4046.86, 1),
-                  "max_depth_ft": round(float(h[k].max()) / geo.FT, 2)}
+                  "cells_over_1ft": int(over.sum()),
+                  "area_over_1ft_acres": round(float(over.sum()) * geo.DX ** 2 / 4046.86, 1),
+                  "max_depth_ft": round(float(np.where(flood, h[k], 0).max()) / geo.FT, 2)}
     out["homes_total"] = int(len(r))
     depths = {k: np.rint(h[k][r, c] / geo.FT * 100).astype(int).tolist() for k in ("p10", "mean", "p90")}
     return out, depths
@@ -299,7 +301,7 @@ def _compute(req, key):
     p = predictor()
     t0 = time.time()
     h = p.predict(z, coast, dz, edits, rain, surge_ft, frames=req.frames)
-    stats, bdepth = _stats(h, z, req.tile_id)
+    stats, bdepth = _stats(h, z, req.tile_id, dz)
     result = {
         "status": "done", "key": key, "backend": p.name, "members": h["members"], "tile_id": req.tile_id,
         "scenario": {"return_period": req.return_period, "rain_in": rain[0], "rain_band_in": [rain[1], rain[2]],

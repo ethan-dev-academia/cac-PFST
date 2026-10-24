@@ -1,0 +1,5 @@
+-r requirements.txt
+fastapi
+uvicorn[standard]
+pillow
+# torch + neuraloperator only if serving a trained model (models/fno.pt)

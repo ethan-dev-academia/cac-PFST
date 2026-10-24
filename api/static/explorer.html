@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Flood Explorer 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg0: #050b16; --bg1: #0b1a2e; --ink: #e8f1ff; --muted: #8aa2c2; --line: rgba(160, 200, 255, 0.16);
+    --glass: rgba(10, 22, 40, 0.72); --accent: #4cc3ff; --warn: #ffb547; --bad: #ff5468; --ok: #3ee6a8;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(120% 90% at 50% 0%, var(--bg1), var(--bg0)); color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; touch-action: none; }
+  .glass { background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--line); border-radius: 14px; }
+  #hud { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+  .seg { display: flex; padding: 3px; gap: 2px; }
+  .seg button { all: unset; cursor: pointer; padding: 7px 11px; border-radius: 10px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+  .seg button.on { background: rgba(76, 195, 255, 0.18); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(76,195,255,.45); }
+  .row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 12px; color: var(--muted); }
+  input[type=range] { accent-color: var(--accent); width: 120px; }
+  #legend { position: absolute; left: 12px; bottom: 12px; padding: 10px 12px; font-size: 11px; color: var(--muted); min-width: 200px; }
+  #legend .bar { height: 8px; border-radius: 4px; margin: 6px 0 4px; background: linear-gradient(90deg, rgba(165,230,255,.5), #60c4ff 15%, #2684ff 30%, #1850dc 45%, #341eaa 70%, #5a0a78); }
+  #legend .ticks { display: flex; justify-content: space-between; }
+  #legend .keys { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  #tip { position: absolute; pointer-events: none; padding: 10px 12px; font-size: 12px; line-height: 1.45; transform: translate(-50%, calc(-100% - 14px)); display: none; white-space: nowrap; }
+  #tip b { font-size: 15px; color: #fff; }
+  #tip .band { color: var(--muted); }
+  #title { position: absolute; left: 12px; top: 12px; padding: 10px 14px; }
+  #title .t { font-weight: 700; font-size: 15px; letter-spacing: .01em; }
+  #title .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  #time { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: none; }
+  #time button { all: unset; cursor: pointer; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: rgba(76,195,255,.2); color: #fff; font-size: 12px; }
+  #time input { width: min(46vw, 280px); }
+  #busy { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+  #busy .card { padding: 14px 18px; font-size: 13px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+  .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(76,195,255,.25); border-top-color: var(--accent); animation: sp 0.9s linear infinite; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  body.embed #title { display: none; }
+  body.embed #legend { left: auto; right: 12px; bottom: auto; top: 108px; }
+  body.embed #time { bottom: auto; top: 12px; left: 50%; }
+  @media (max-width: 760px) { body.embed #hud { top: 66px; } body.embed #legend { top: 162px; } body.embed #time { top: 66px; left: 12px; transform: none; } }
+  @media (max-width: 560px) { #title { display: none; } #legend { min-width: 0; right: 12px; } input[type=range] { width: 90px; } }
+</style>
+</head>
+<body>
+<div id="title" class="glass"><div class="t" id="tname">Loading tile…</div><div class="s" id="tsub">Pasco Flood Screening · 3D</div></div>
+<div id="hud">
+  <div class="seg glass" id="band">
+    <button data-k="p10">P10</button><button data-k="mean" class="on">Mean</button><button data-k="p90">P90</button>
+  </div>
+  <div class="row glass">Relief <input id="exag" type="range" min="2" max="30" value="12"></div>
+</div>
+<div id="legend" class="glass">
+  <div>Max flood depth</div>
+  <div class="bar"></div>
+  <div class="ticks"><span>0</span><span>0.5 ft</span><span>1 ft</span><span>2 ft</span><span>3+ ft</span><span>6.5 ft</span></div>
+  <div class="keys"><span><i class="dot" style="background:#e9eef7"></i>Dry home</span><span><i class="dot" style="background:var(--warn)"></i>&lt; 1 ft</span><span><i class="dot" style="background:var(--bad)"></i>&gt; 1 ft</span><span><i class="dot" style="background:var(--ok)"></i>Project</span></div>
+</div>
+<div id="time" class="glass row"><button id="play">▶</button><input id="tslider" type="range" min="0" max="0" value="0"><span id="tlabel">—</span></div>
+<div id="tip" class="glass"></div>
+<div id="busy"><div class="card glass"><div class="spin"></div><span id="busytext">Loading terrain…</span></div></div>
+
+<script src="common.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+if (PF.params.get("embed") === "1") document.body.classList.add("embed");
+const N = PF.N, W = 128, half = W / 2, step = W / (N - 1);
+const S = { tile: null, z: null, zEff: null, zmin: 0, coast: null, buildings: [], result: null, band: "mean",
+            grids: {}, frames: null, frameIdx: -1, exag: 12, edits: [], pin: null, surgeM: null, rise: 1 };
+const $ = (id) => document.getElementById(id);
+const busy = (t) => { $("busy").style.display = t ? "grid" : "none"; if (t) $("busytext").textContent = t; };
+
+// ---------------------------------------------------------------- scene
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x07111f, 160, 420);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.5, 2000);
+camera.position.set(-70, 85, 105);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.47; controls.minDistance = 20; controls.maxDistance = 320;
+controls.autoRotate = true; controls.autoRotateSpeed = 0.35;
+controls.addEventListener("start", () => (controls.autoRotate = false));
+
+scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x1a2433, 0.85));
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
+sun.position.set(-80, 120, 40); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -90, right: 90, top: 90, bottom: -90, near: 10, far: 400 });
+scene.add(sun);
+
+// base slab under the tile so it reads as a physical model
+const slabMat = new THREE.MeshStandardMaterial({ color: 0x0d1a2c, roughness: 0.9 });
+const slab = new THREE.Mesh(new THREE.BoxGeometry(W + 0.01, 1, W + 0.01), slabMat);
+scene.add(slab);
+const grid = new THREE.GridHelper(600, 60, 0x1d3555, 0x112238);
+grid.position.y = -0.6; scene.add(grid);
+
+// terrain
+const terrGeo = new THREE.PlaneGeometry(W, W, N - 1, N - 1); terrGeo.rotateX(-Math.PI / 2);
+const terrMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0.0 });
+const terrain = new THREE.Mesh(terrGeo, terrMat); terrain.receiveShadow = true; scene.add(terrain);
+
+// water: per-vertex depth + sea flag; discard where dry
+const watGeo = new THREE.PlaneGeometry(W, W, N - 1, N - 1); watGeo.rotateX(-Math.PI / 2);
+watGeo.setAttribute("depth", new THREE.BufferAttribute(new Float32Array(N * N), 1));
+watGeo.setAttribute("sea", new THREE.BufferAttribute(new Float32Array(N * N), 1));
+const watMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false,
+  uniforms: { time: { value: 0 }, sunDir: { value: sun.position.clone().normalize() }, camPos: { value: camera.position } },
+  vertexShader: `
+    attribute float depth; attribute float sea; varying float vD; varying float vSea; varying vec3 vW;
+    void main(){ vD = depth; vSea = sea; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+  fragmentShader: `
+    uniform float time; uniform vec3 sunDir; uniform vec3 camPos; varying float vD; varying float vSea; varying vec3 vW;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+    float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+      return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
+    void main(){
+      if (vD < 0.05) discard;
+      vec3 c0 = vec3(0.62,0.90,1.0), c1 = vec3(0.15,0.52,1.0), c2 = vec3(0.09,0.30,0.86), c3 = vec3(0.20,0.11,0.62), c4 = vec3(0.35,0.04,0.47);
+      float d = vD;
+      vec3 col = d < .305 ? mix(c0,c1,d/.305) : d < .6 ? mix(c1,c2,(d-.305)/.295) : d < 1.0 ? mix(c2,c3,(d-.6)/.4) : mix(c3,c4,clamp((d-1.0),0.,1.));
+      col = mix(col, vec3(0.05,0.35,0.45), vSea*0.65);
+      vec2 p = vW.xz*0.45; float t = time*0.5;
+      float r = n(p + vec2(t, t*0.7)) * 0.6 + n(p*2.3 - vec2(t*1.3, -t)) * 0.4;
+      vec3 nrm = normalize(vec3((r-0.5)*0.18, 1.0, (n(p.yx+t)-0.5)*0.18));
+      vec3 v = normalize(camPos - vW); vec3 hv = normalize(sunDir + v);
+      float spec = pow(max(dot(nrm, hv), 0.0), 140.0) * 0.45;
+      float fres = pow(1.0 - max(dot(nrm, v), 0.0), 3.0);
+      col += spec + fres*0.12;
+      float a = clamp(0.42 + d*0.6, 0.42, 0.9) * smoothstep(0.05, 0.09, d);
+      gl_FragColor = vec4(col, a);
+    }`,
+});
+const water = new THREE.Mesh(watGeo, watMat); water.renderOrder = 2; scene.add(water);
+
+// buildings (instanced)
+const MAXB = 6000;
+const bGeo = new THREE.BoxGeometry(0.62, 1, 0.62); bGeo.translate(0, 0.5, 0);
+const bMat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 });
+const bMesh = new THREE.InstancedMesh(bGeo, bMat, MAXB); bMesh.count = 0; bMesh.castShadow = true;
+bMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAXB * 3), 3);
+scene.add(bMesh);
+
+// edits + pin overlays
+const overlay = new THREE.Group(); scene.add(overlay);
+const pinGroup = new THREE.Group(); scene.add(pinGroup);
+
+// ---------------------------------------------------------------- geometry updates
+const xOf = (c) => -half + c * step, zOf = (r) => -half + r * step;
+const yOf = (zm) => (zm - S.zmin) * S.exag / 10 + 0.5;
+function cellAt(r, c) { return Math.max(0, Math.min(N - 1, r)) * N + Math.max(0, Math.min(N - 1, c)); }
+
+function depthField() {
+  const g = S.frames && S.frameIdx >= 0 ? S.frames[S.frameIdx] : S.grids[S.band];
+  return g || null;
+}
+
+function updateTerrain() {
+  if (!S.zEff) return;
+  const pos = terrGeo.attributes.position;
+  for (let k = 0; k < N * N; k++) pos.setY(k, yOf(S.zEff[k]));
+  pos.needsUpdate = true; terrGeo.computeVertexNormals();
+  slab.scale.y = 1; slab.position.y = 0;
+  updateWater(); updateBuildings(); drawEdits(); drawPin();
+}
+
+function updateWater() {
+  if (!S.zEff) return;
+  const h = depthField(), pos = watGeo.attributes.position, dep = watGeo.attributes.depth, sea = watGeo.attributes.sea;
+  for (let k = 0; k < N * N; k++) {
+    let d = h ? h[k] * S.rise : 0, isSea = 0;
+    if (S.coast && S.coast[k]) { isSea = 1; d = Math.max((S.surgeM ?? 0.19) - S.zEff[k], 0.05); }
+    dep.setX(k, d); sea.setX(k, isSea);
+    pos.setY(k, yOf(S.zEff[k] + d) + 0.03);
+  }
+  pos.needsUpdate = dep.needsUpdate = sea.needsUpdate = true;
+}
+
+const C_DRY = new THREE.Color(0xe9eef7), C_WET = new THREE.Color(0xffb547), C_BAD = new THREE.Color(0xff5468);
+function updateBuildings() {
+  if (!S.zEff) return;
+  const h = depthField(), m = new THREE.Matrix4(), col = new THREE.Color();
+  const B = S.buildings.slice(0, MAXB);
+  B.forEach(([r, c], i) => {
+    const k = cellAt(r, c), d = h ? h[k] * S.rise : 0;
+    const ht = 0.55 + (S.exag / 12) * 0.35;
+    m.makeScale(1, ht, 1); m.setPosition(xOf(c), yOf(S.zEff[k]), zOf(r));
+    bMesh.setMatrixAt(i, m);
+    col.copy(d > PF.FT ? C_BAD : d > 0.05 ? C_WET : C_DRY);
+    bMesh.setColorAt(i, col);
+  });
+  bMesh.count = B.length; bMesh.instanceMatrix.needsUpdate = true; bMesh.instanceColor.needsUpdate = true;
+}
+
+function lineAt(points, color, lift = 0.6) {
+  const pts = points.map(([r, c]) => new THREE.Vector3(xOf(c), yOf(S.zEff[cellAt(Math.round(r), Math.round(c))]) + lift, zOf(r)));
+  const g = new THREE.BufferGeometry().setFromPoints(pts);
+  return new THREE.Line(g, new THREE.LineBasicMaterial({ color, linewidth: 2, transparent: true, opacity: 0.95 }));
+}
+function drawEdits() {
+  overlay.clear();
+  if (!S.zEff) return;
+  for (const e of S.edits) {
+    if (e.type === "pond" && e.center) {
+      const R = (e.radius_m || 40) / 10, pts = [];
+      for (let a = 0; a <= 64; a++) pts.push([e.center[0] + R * Math.sin(a / 64 * 2 * Math.PI), e.center[1] + R * Math.cos(a / 64 * 2 * Math.PI)]);
+      overlay.add(lineAt(pts, 0x3ee6a8, 0.8));
+      const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 6, 12), new THREE.MeshBasicMaterial({ color: 0x3ee6a8, transparent: true, opacity: 0.6 }));
+      const [r, c] = e.center; beacon.position.set(xOf(c), yOf(S.zEff[cellAt(Math.round(r), Math.round(c))]) + 3, zOf(r));
+      overlay.add(beacon);
+    } else if (e.type === "road" && e.path && e.path.length > 1) {
+      overlay.add(lineAt(e.path, 0x3ee6a8, 1.0));
+    } else if (e.type === "culvert" && e.a && e.b) {
+      overlay.add(lineAt([e.a, e.b], 0x9ef0ff, 0.4));
+    }
+  }
+}
+function drawPin() {
+  pinGroup.clear();
+  if (!S.pin || !S.zEff) return;
+  const [r, c] = S.pin, k = cellAt(r, c), y = yOf(S.zEff[k]);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 14, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  stem.position.set(xOf(c), y + 7, zOf(r));
+  const head = new THREE.Mesh(new THREE.SphereGeometry(1.1, 24, 16), new THREE.MeshBasicMaterial({ color: 0xff5468 }));
+  head.position.set(xOf(c), y + 14.5, zOf(r));
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.2, 48), new THREE.MeshBasicMaterial({ color: 0xff5468, side: THREE.DoubleSide, transparent: true, opacity: 0.8 }));
+  ring.rotation.x = -Math.PI / 2; ring.position.set(xOf(c), y + 0.3, zOf(r)); ring.userData.pulse = true;
+  pinGroup.add(stem, head, ring);
+}
+
+// ---------------------------------------------------------------- data
+async function loadTile(tid) {
+  busy("Loading terrain…");
+  const t = await PF.getJSON(`/tiles/${tid}`);
+  S.tile = t; S.z = PF.f32(t.z_b64); S.zEff = S.z.slice(); S.coast = PF.u8(t.coast_b64);
+  S.zmin = t.z_min; S.buildings = t.buildings; S.grids = {}; S.frames = null; S.result = null;
+  $("tname").textContent = `${t.place} · ${t.id}`;
+  $("tsub").textContent = `${t.buildings.length.toLocaleString()} buildings · ground ${PF.fmtFt(t.z_min)} – ${PF.fmtFt(t.z_max)} NAVD88`;
+  new THREE.TextureLoader().load(PF.api + t.imagery, (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; terrMat.map = tex; terrMat.needsUpdate = true;
+  }, undefined, () => { terrMat.color.set(0x55705a); });
+  updateTerrain(); busy(null);
+  PF.send({ type: "loaded", tile_id: tid });
+}
+
+async function loadResult(key) {
+  busy("Rendering flood…");
+  const r = await PF.getJSON(`/jobs/${key}`);
+  if (r.status !== "done") { busy(null); return; }
+  if (S.tile?.id !== r.tile_id) await loadTile(r.tile_id);
+  S.result = r;
+  S.grids = { mean: PF.mm(r.grids.mean), p10: PF.mm(r.grids.p10), p90: PF.mm(r.grids.p90) };
+  const dz = PF.f32(r.dz_b64); S.zEff = S.z.map((v, k) => v + dz[k]);
+  S.surgeM = r.scenario.surge_ft * PF.FT;
+  if (r.frames) {
+    S.frames = r.frames.grids.map(PF.mm); S.frameT = r.frames.t_h; S.frameIdx = -1;
+    $("time").style.display = "flex"; $("tslider").max = S.frames.length; $("tslider").value = S.frames.length;
+    $("tlabel").textContent = "Peak";
+  } else { S.frames = null; $("time").style.display = "none"; }
+  S.edits = r.scenario.edits || S.edits;
+  busy(null);
+  // "rise" animation on arrival
+  S.rise = 0; const t0 = performance.now();
+  (function grow() { S.rise = Math.min(1, (performance.now() - t0) / 1400); S.rise = 1 - Math.pow(1 - S.rise, 3);
+    updateTerrain(); if (S.rise < 1) requestAnimationFrame(grow); })();
+}
+
+// ---------------------------------------------------------------- UI
+document.querySelectorAll("#band button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("#band button").forEach((x) => x.classList.toggle("on", x === b));
+  S.band = b.dataset.k; S.frameIdx = -1; if (S.frames) { $("tslider").value = S.frames.length; $("tlabel").textContent = "Peak"; }
+  updateWater(); updateBuildings();
+});
+$("exag").oninput = (e) => { S.exag = +e.target.value; updateTerrain(); };
+let playing = null;
+$("tslider").oninput = (e) => setFrame(+e.target.value);
+function setFrame(i) {
+  if (!S.frames) return;
+  S.frameIdx = i >= S.frames.length ? -1 : i;
+  $("tlabel").textContent = S.frameIdx < 0 ? "Peak" : `t = ${S.frameT[i].toFixed(1)} h`;
+  updateWater(); updateBuildings();
+}
+$("play").onclick = () => {
+  if (playing) { clearInterval(playing); playing = null; $("play").textContent = "▶"; return; }
+  $("play").textContent = "❚❚"; let i = 0;
+  playing = setInterval(() => { setFrame(i); $("tslider").value = i; i++; if (i > S.frames.length) { clearInterval(playing); playing = null; $("play").textContent = "▶"; } }, 260);
+};
+
+// picking
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function pick(ev) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  ndc.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObject(terrain)[0];
+  if (!hit) return null;
+  const c = Math.round((hit.point.x + half) / step), r = Math.round((hit.point.z + half) / step);
+  if (r < 0 || r >= N || c < 0 || c >= N) return null;
+  return { r, c };
+}
+function cellInfo(r, c) {
+  const k = r * N + c, g = S.grids, out = { cell: [r, c], ground_ft: +(S.zEff[k] / PF.FT).toFixed(2) };
+  if (g.mean) Object.assign(out, { mean_ft: +(g.mean[k] / PF.FT).toFixed(2), p10_ft: +(g.p10[k] / PF.FT).toFixed(2), p90_ft: +(g.p90[k] / PF.FT).toFixed(2) });
+  if (S.tile) out.lonlat = PF.cellToLonLat(S.tile.corners, r, c);
+  out.coast = !!(S.coast && S.coast[k]);
+  return out;
+}
+function showTip(ev, info) {
+  const tip = $("tip");
+  if (!info) { tip.style.display = "none"; return; }
+  let html;
+  if (info.coast) html = `<b>Open water</b><div class="band">Gulf / tidal channel</div>`;
+  else if (info.mean_ft !== undefined) html = `<b>${info.mean_ft.toFixed(1)} ft</b> max depth<div class="band">p10 ${info.p10_ft.toFixed(1)} · p90 ${info.p90_ft.toFixed(1)} ft</div><div class="band">ground ${info.ground_ft.toFixed(1)} ft NAVD88</div>`;
+  else html = `<b>${info.ground_ft.toFixed(1)} ft</b> ground (NAVD88)<div class="band">run a scenario to see depth</div>`;
+  tip.innerHTML = html; tip.style.left = ev.clientX + "px"; tip.style.top = ev.clientY + "px"; tip.style.display = "block";
+}
+let down = null;
+renderer.domElement.addEventListener("pointerdown", (e) => (down = { x: e.clientX, y: e.clientY, t: performance.now() }));
+renderer.domElement.addEventListener("pointerup", (e) => {
+  if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6 || performance.now() - down.t > 500) return;
+  const p = pick(e); if (!p || !S.zEff) return;
+  const info = cellInfo(p.r, p.c); showTip(e, info);
+  PF.send({ type: "tap", ...info });
+});
+renderer.domElement.addEventListener("pointermove", (e) => {
+  if (e.pointerType !== "mouse" || e.buttons) return;
+  const p = pick(e); showTip(e, p && S.zEff ? cellInfo(p.r, p.c) : null);
+});
+
+PF.onMessage((m) => {
+  if (m.type === "load" && m.tile_id && m.tile_id !== S.tile?.id) loadTile(m.tile_id).catch((e) => busy("Could not load tile: " + e.message));
+  if (m.type === "result" && m.key) loadResult(m.key).catch((e) => busy("Could not load result: " + e.message));
+  if (m.type === "clear") { S.grids = {}; S.frames = null; S.zEff = S.z?.slice(); $("time").style.display = "none"; updateTerrain(); }
+  if (m.type === "edits") { S.edits = m.edits || []; drawEdits(); }
+  if (m.type === "pin") { S.pin = m.cell; drawPin(); if (m.cell) controls.target.set(xOf(m.cell[1]), 0, zOf(m.cell[0])); }
+  if (m.type === "band") { document.querySelector(`#band button[data-k=${m.band}]`)?.click(); }
+});
+
+addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+const clock = new THREE.Clock();
+function frame() {
+  const t = clock.getElapsedTime();
+  watMat.uniforms.time.value = t; watMat.uniforms.camPos.value.copy(camera.position);
+  pinGroup.children.forEach((o) => { if (o.userData.pulse) { const s = 1 + 0.35 * Math.sin(t * 3); o.scale.set(s, s, s); } });
+  controls.update(); renderer.render(scene, camera);
+}
+// the app hides this view (opacity 0) when the map is showing: stop rendering then
+let visible = PF.params.get("hidden") !== "1";
+renderer.setAnimationLoop(visible ? frame : null);
+PF.onMessage((m) => { if (m.type === "visible") { visible = !!m.on; renderer.setAnimationLoop(visible ? frame : null); } });
+
+const tid = PF.params.get("tile");
+if (tid) loadTile(tid).catch((e) => busy("Could not load tile: " + e.message));
+else busy("Choose a neighborhood on the map");
+const key = PF.params.get("result");
+if (key) loadResult(key).catch(() => {});
+PF.send({ type: "ready", view: "explorer" });
+</script>
+</body>
+</html>

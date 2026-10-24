@@ -69,7 +69,7 @@ export function analyzeProject(projectId: string, onDone?: (base: Prediction, pr
     if (cur) {
       useStore.getState().upsertProject({
         ...cur, baselineKey: base.key, projectKey: proj?.key, homesBefore: b.mean.homes_flagged,
-        homesAfter: a?.mean.homes_flagged,
+        homesAfter: a?.mean.homes_flagged, inFootprint: a?.homes_in_footprint ?? 0,
         removedBand: a ? [b.p10.homes_flagged - a.p10.homes_flagged, b.p90.homes_flagged - a.p90.homes_flagged].sort((x, y) => x - y) as [number, number] : undefined,
         updatedAt: Date.now(),
       });

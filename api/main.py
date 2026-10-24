@@ -333,10 +333,11 @@ def _stats(h, z, tid, dz):
     except Exception:
         r = c = np.zeros(0, int)
     flood = dz >= 0  # water standing in an excavated pond is storage, not flooding
-    out = {}
+    keep = flood[r, c] if len(r) else np.zeros(0, bool)   # buildings under a pond footprint are not "flooded homes"
+    out = {"homes_in_footprint": int((~keep).sum())}
     for k in ("p10", "mean", "p90"):
         over = (h[k] > FT1) & flood
-        out[k] = {"homes_flagged": int((h[k][r, c] > FT1).sum()) if len(r) else 0,
+        out[k] = {"homes_flagged": int(((h[k][r, c] > FT1) & keep).sum()) if len(r) else 0,
                   "cells_over_1ft": int(over.sum()),
                   "area_over_1ft_acres": round(float(over.sum()) * geo.DX ** 2 / 4046.86, 1),
                   "max_depth_ft": round(float(np.where(flood, h[k], 0).max()) / geo.FT, 2)}

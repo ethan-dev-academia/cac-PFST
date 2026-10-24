@@ -70,7 +70,7 @@ function ProjectList() {
               <Text style={T.h3}>{p.name}</Text>
               <Text style={T.small}>{p.place || "Site not chosen"} · {p.edits.length} edit{p.edits.length === 1 ? "" : "s"} · {p.rp}-yr storm</Text>
             </View>
-            {r != null ? <Pill label={r > 0 ? `−${r} homes` : `${r} homes`} color={r > 0 ? C.ok : C.muted} /> : <Pill label="not run" color={C.faint} />}
+            {r != null ? <Pill label={r > 0 ? `−${r} homes` : r < 0 ? `+${-r} homes` : "no change"} color={r > 0 ? C.ok : r < 0 ? C.bad : C.muted} /> : <Pill label="not run" color={C.faint} />}
             <Icon name="chevron-forward" size={18} color={C.faint} />
           </Card>
         );
@@ -182,11 +182,22 @@ function ProjectEditor({ p, onRunDone, onShow }: { p: Project; onRunDone: () => 
           {p.homesBefore != null && (
             <Card style={{ gap: 12 }}>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-                <Stat value={r != null ? (r > 0 ? `−${r}` : String(r)) : "—"} label="homes removed from > 1 ft" color={r && r > 0 ? C.ok : C.muted}
+                <Stat value={r == null ? "—" : r > 0 ? `−${r}` : r < 0 ? `+${-r}` : "±0"}
+                      label={r != null && r < 0 ? "more homes over 1 ft" : "homes removed from > 1 ft"}
+                      color={r == null ? C.muted : r > 0 ? C.ok : r < 0 ? C.bad : C.muted}
                       sub={p.removedBand ? `band ${p.removedBand[0]} to ${p.removedBand[1]}` : undefined} />
                 <Stat value={cph ? money(cph) : "—"} label="cost per home protected" />
               </View>
               <Text style={T.small}>{p.homesBefore} homes flooded before → {p.homesAfter ?? "?"} after, in a {p.rp}-yr storm{p.surgeFt > tide + 0.05 ? " with Helene surge" : ""}.</Text>
+              {!!p.inFootprint && (
+                <View style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+                  <Icon name="warning-outline" size={18} color={C.warn} />
+                  <Text style={[T.small, { flex: 1, color: C.warn }]}>The pond footprint covers {p.inFootprint} building{p.inFootprint > 1 ? "s" : ""} (not counted above). Move it onto an open lot, or budget for acquisitions.</Text>
+                </View>
+              )}
+              {r != null && r <= 0 && (
+                <Text style={T.small}>No homes come out of the &gt; 1 ft footprint. Try placing the pond where water collects upstream of the flooded homes, or raising the road that blocks drainage.</Text>
+              )}
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <Button title="Before" kind={st.showing === "baseline" ? "primary" : "ghost"} onPress={() => onShow("baseline")} style={{ flex: 1 }} />
                 <Button title="After" kind={st.showing === "project" ? "primary" : "ghost"} onPress={() => onShow("project")} style={{ flex: 1 }} />

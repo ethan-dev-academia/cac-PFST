@@ -33,6 +33,7 @@ export interface Project {
   homesBefore?: number;
   homesAfter?: number;
   removedBand?: [number, number];
+  inFootprint?: number;
   updatedAt: number;
 }
 

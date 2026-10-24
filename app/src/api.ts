@@ -27,7 +27,7 @@ export interface Prediction {
   scenario: { return_period: number | null; rain_in: number; rain_band_in: [number, number]; surge_ft: number; edits: Edit[] };
   grids: { mean: string; p10: string; p90: string };
   overlay_png: string;
-  stats: { p10: BandStats; mean: BandStats; p90: BandStats; homes_total: number };
+  stats: { p10: BandStats; mean: BandStats; p90: BandStats; homes_total: number; homes_in_footprint?: number };
   compute_s: number;
 }
 export interface Running { status: "running" | "error"; job_id: string; elapsed_s: number; eta_s: number; error?: string }

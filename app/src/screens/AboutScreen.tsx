@@ -6,6 +6,12 @@ import { Group, Header, Row, Segmented, Txt } from "../ui";
 export function AboutScreen() {
   const st = useStore(); const t = useTheme();
   const ready = st.backend === "fno";
+  const mi = st.modelInfo;
+  const maeIn = mi?.test?.mae_m != null ? Math.round(mi.test.mae_m * 39.37) : null;
+  const iouPct = mi?.test?.iou_1ft != null ? Math.round(mi.test.iou_1ft * 100) : null;
+  const accuracy = maeIn != null
+    ? `Trained on the full simulations, then checked against ones it never saw: typically within ${maeIn} inch${maeIn === 1 ? "" : "es"} of depth${iouPct != null ? `, agreeing on about ${iouPct}% of the flooded area` : ""}.`
+    : "A model trained on the full simulations reproduces them in about a second.";
   return (
     <View style={{ gap: 22 }}>
       <Header title="Settings" back="Back" onBack={() => st.set({ tab: st.openPlaceId ? "home" : "home" })} />
@@ -30,6 +36,7 @@ export function AboutScreen() {
       </Group>
 
       <Group title="How it works">
+        {ready && <Row icon="flash" iconBg="#34C759" title="Instant answers" subtitle={accuracy} />}
         <Row icon="layers" iconBg="#5E5CE6" title="Real ground" subtitle="The county's 2018 laser survey, at 10 m detail, with building pads, ponds and canals." />
         <Row icon="rainy" iconBg="#007AFF" title="Real storms" subtitle="NOAA rainfall statistics for Pasco, and the storm tide Helene brought to Clearwater in 2024." />
         <Row icon="water" iconBg="#32ADE6" title="Water physics" subtitle="We simulate water flowing across the ground minute by minute, then take the deepest it gets." />

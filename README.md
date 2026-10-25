@@ -73,6 +73,14 @@ cd app && npm install && npx expo start           # w = web/desktop; scan the QR
 - **Phones:** the app looks for the API on the same machine as the Expo dev server, at port 8000. Otherwise set `EXPO_PUBLIC_API_URL=http://<lan-ip>:8000`.
 - **Expo Go:** everything used (WebView, print, sharing) ships in Expo Go, so no dev build is needed.
 
+**Pretrained model:** the API falls back to the (slow) solver until `models/fno.pt` exists. Grab the trained checkpoint — distributed as a GitHub release asset, not committed — with:
+
+```bash
+python scripts/fetch_model.py        # downloads models/fno.pt (~70 MB)
+```
+
+Then restart the API and `/health` reports `"backend": "fno"` with sub-second predictions. Point elsewhere with `PFST_MODEL=/path/to/fno.pt`.
+
 **Training** (GPU machine): start with [`GPU_HANDOFF.md`](GPU_HANDOFF.md), then [`training/README.md`](training/README.md). Generate the dataset, smoke test, then train. Drop `models/fno.pt` next to the API and `/health` switches from `solver` to `fno`.
 
 ## Repo layout

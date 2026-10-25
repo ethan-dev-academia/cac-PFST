@@ -110,7 +110,13 @@ def health():
 @app.get("/tiles")
 def list_tiles():
     cat = tiles.load_catalog()
-    return {"study_bbox": cat["study_bbox"], "tiles": [_tile_summary(t) for t in cat["tiles"]]}
+    ts = cat["tiles"]
+    bbox = cat.get("study_bbox")
+    if bbox is None:  # catalog on main omits it; derive from tile centers
+        lons = [t["lon"] for t in ts]
+        lats = [t["lat"] for t in ts]
+        bbox = [min(lons), min(lats), max(lons), max(lats)]
+    return {"study_bbox": bbox, "tiles": [_tile_summary(t) for t in ts]}
 
 
 @app.get("/grid")

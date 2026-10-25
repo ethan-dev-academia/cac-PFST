@@ -61,6 +61,21 @@ random ponds / roads ─► pfst.scenario ────────────�
 
 ## Running it
 
+**Quickest (clone and run):** the repo ships with the prebuilt app, the trained
+model (`models/fno_fp16.pt`) and cached terrain, so no Node, model download or
+network is needed. Just:
+
+```bash
+git clone https://github.com/ethan-dev-academia/cac-PFST && cd cac-PFST
+# Windows: double-click start.bat   •   macOS: double-click start.command
+python run.py                        # or run the launcher directly
+```
+
+First launch sets up a CPU virtualenv and opens `http://localhost:8000/app/`.
+See [`DISTRIBUTION.md`](DISTRIBUTION.md) for the installer and release options.
+
+**Manual / development setup:**
+
 ```bash
 python -m venv .venv && .venv/Scripts/activate   # macOS/Linux: . .venv/bin/activate
 pip install -r requirements-api.txt

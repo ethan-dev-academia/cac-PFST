@@ -4,27 +4,38 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Pasco Flood Map</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet">
 <style>
-  :root { --ink: #e8f1ff; --muted: #8aa2c2; --line: rgba(160,200,255,.16); --glass: rgba(10,22,40,.74); --accent: #4cc3ff; --bad: #ff5468; --ok: #3ee6a8; }
-  html, body, #map { margin: 0; height: 100%; background: #050b16; font-family: Inter, system-ui, sans-serif; color: var(--ink); }
-  .glass { background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--line); border-radius: 14px; }
-  #legend { position: absolute; left: 12px; bottom: 28px; padding: 10px 12px; font-size: 11px; color: var(--muted); min-width: 190px; display: none; }
-  #legend .bar { height: 8px; border-radius: 4px; margin: 6px 0 4px; background: linear-gradient(90deg, rgba(165,230,255,.5), #60c4ff 15%, #2684ff 30%, #1850dc 45%, #341eaa 70%, #5a0a78); }
-  #legend .ticks { display: flex; justify-content: space-between; }
-  .maplibregl-popup-content { background: var(--glass); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(12px); font-size: 12px; padding: 10px 12px; }
+  :root { --bg: #f2f2f7; --surface: rgba(255,255,255,.96); --label: #1c1c1e; --label2: #5f6368; --sep: rgba(60,60,67,.16); --tint: #007aff; --bad: #ff3b30; }
+  body.dark { --bg: #000; --surface: rgba(28,28,30,.96); --label: #f5f5f7; --label2: #aeaeb2; --sep: rgba(84,84,88,.55); --tint: #0a84ff; --bad: #ff453a; }
+  html, body, #map { margin: 0; height: 100%; background: var(--bg); color: var(--label);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .card { background: var(--surface); border-radius: 12px; box-shadow: 0 4px 18px rgba(0,0,0,.14); }
+  #legend { position: absolute; left: 12px; bottom: 24px; padding: 10px 12px; font-size: 12px; color: var(--label2); min-width: 200px; display: none; }
+  #legend b { color: var(--label); font-weight: 600; }
+  #legend .bar { height: 8px; border-radius: 4px; margin: 7px 0 4px; background: linear-gradient(90deg, rgba(165,230,255,.6), #60c4ff 15%, #2684ff 30%, #1850dc 45%, #341eaa 70%, #5a0a78); }
+  #legend .ticks { display: flex; justify-content: space-between; font-size: 11px; }
+  .maplibregl-popup-content { background: var(--surface); color: var(--label); border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); font: 13px/1.4 inherit; padding: 10px 12px; }
+  .maplibregl-popup-content .sub { color: var(--label2); }
   .maplibregl-popup-tip { display: none; }
-  .maplibregl-ctrl-attrib { background: rgba(5,11,22,.6) !important; color: #6d84a6; font-size: 10px; }
-  .maplibregl-ctrl-attrib a { color: #8aa2c2; }
-  .pin { width: 22px; height: 22px; border-radius: 50%; background: var(--bad); border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(255,84,104,.35), 0 6px 18px rgba(0,0,0,.5); animation: pulse 1.8s ease-out infinite; }
-  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,84,104,.6), 0 6px 18px rgba(0,0,0,.5);} 100% { box-shadow: 0 0 0 22px rgba(255,84,104,0), 0 6px 18px rgba(0,0,0,.5);} }
+  .hov .maplibregl-popup-content { pointer-events: none; }
+  #classes { display: none !important; }
+  .maplibregl-ctrl-attrib { background: transparent !important; color: var(--label2); font-size: 10px; }
+  .maplibregl-ctrl-attrib a { color: var(--label2); }
+  .maplibregl-ctrl-group { background: var(--surface) !important; border-radius: 10px !important; box-shadow: 0 2px 8px rgba(0,0,0,.15) !important; }
+  .pin { width: 20px; height: 20px; border-radius: 50%; background: var(--bad); border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.35); animation: pulse 2s ease-out infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,59,48,.5), 0 2px 8px rgba(0,0,0,.35);} 100% { box-shadow: 0 0 0 18px rgba(255,59,48,0), 0 2px 8px rgba(0,0,0,.35);} }
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div id="legend" class="glass"><div>Max flood depth (mean)</div><div class="bar"></div>
-  <div class="ticks"><span>0</span><span>0.5</span><span>1 ft</span><span>2</span><span>3+</span><span>6.5</span></div></div>
+<div id="classes" class="glass">
+  <div><i style="background:rgba(76,195,255,.6)"></i>Coastal low-lying</div>
+  <div><i style="background:rgba(64,110,255,.6)"></i>Low-lying inland</div>
+  <div><i style="background:rgba(150,190,140,.35)"></i>Higher ground</div>
+</div>
+<div id="legend" class="card"><b>Deepest water</b><div class="bar"></div>
+  <div class="ticks"><span>2 in</span><span>6 in</span><span>1 ft</span><span>2 ft</span><span>3 ft+</span></div></div>
 <script src="common.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 <script>
@@ -32,11 +43,15 @@ const ORG = "https://services6.arcgis.com/Mo4MddfRHpFwT7UF/ArcGIS/rest/services"
 const S = { tiles: [], tile: null, corners: null, result: null, edits: [], marker: null, depth: null };
 
 const map = new maplibregl.Map({
-  container: "map", center: [-82.71, 28.30], zoom: 10.6, pitch: 50, bearing: -12, maxPitch: 80,
+  container: "map", center: [-82.70, 28.30], zoom: 10.4, pitch: 0, bearing: 0, maxPitch: 70,
   attributionControl: { compact: true },
   style: {
     version: 8, glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
     sources: {
+      light: { type: "raster", tileSize: 256, maxzoom: 16, tiles: ["https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"], attribution: "Esri, HERE, Garmin, © OpenStreetMap" },
+      lightref: { type: "raster", tileSize: 256, maxzoom: 16, tiles: ["https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}"] },
+      darkst: { type: "raster", tileSize: 256, maxzoom: 16, tiles: ["https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"], attribution: "Esri, HERE, Garmin, © OpenStreetMap" },
+      darkref: { type: "raster", tileSize: 256, maxzoom: 16, tiles: ["https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"] },
       sat: { type: "raster", tileSize: 256, maxzoom: 19,
              tiles: ["https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
              attribution: "Imagery © Esri, Maxar, Earthstar" },
@@ -49,20 +64,25 @@ const map = new maplibregl.Map({
              attribution: "FEMA NFHL" },
     },
     layers: [
-      { id: "sat", type: "raster", source: "sat", paint: { "raster-saturation": -0.25, "raster-brightness-max": 0.78, "raster-contrast": 0.1 } },
-      { id: "fema", type: "raster", source: "fema", layout: { visibility: "none" }, paint: { "raster-opacity": 0.55 } },
-      { id: "labels", type: "raster", source: "labels", paint: { "raster-opacity": 0.85 } },
+      { id: "light", type: "raster", source: "light" },
+      { id: "darkst", type: "raster", source: "darkst", layout: { visibility: "none" } },
+      { id: "sat", type: "raster", source: "sat", layout: { visibility: "none" } },
+      { id: "fema", type: "raster", source: "fema", layout: { visibility: "none" }, paint: { "raster-opacity": 0.5 } },
+      { id: "labels", type: "raster", source: "labels", layout: { visibility: "none" }, paint: { "raster-opacity": 0.9 } },
+      { id: "lightref", type: "raster", source: "lightref" },
+      { id: "darkref", type: "raster", source: "darkref", layout: { visibility: "none" } },
     ],
-    sky: { "sky-color": "#0b1a2e", "horizon-color": "#1c3a5e", "fog-color": "#0b1a2e", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.6, "fog-ground-blend": 0.3 },
   },
 });
 map.on("error", (e) => console.warn("map error", e.error?.message || e));
 if (innerWidth > 760) map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 
+
 const empty = { type: "FeatureCollection", features: [] };
 map.on("load", async () => {
-  if (PF.params.get("terrain") !== "0") map.setTerrain({ source: "dem", exaggeration: 4 });
-  map.addSource("tiles", { type: "geojson", data: empty });
+  applyTheme();
+  map.addSource("grid", { type: "geojson", data: empty });
+  map.addSource("sel", { type: "geojson", data: empty });
   map.addSource("observed", { type: "geojson", data: empty });
   map.addSource("swfwmd", { type: "geojson", data: empty });
   map.addSource("buildings", { type: "geojson", data: empty });
@@ -73,12 +93,17 @@ map.on("load", async () => {
                  paint: { "fill-color": "#ff5468", "fill-opacity": 0.28 } });
   map.addLayer({ id: "observed-line", type: "line", source: "observed", layout: { visibility: "none" },
                  paint: { "line-color": "#ff8a98", "line-width": 1.2 } });
-  map.addLayer({ id: "tiles-fill", type: "fill", source: "tiles",
-                 paint: { "fill-color": ["case", ["boolean", ["feature-state", "sel"], false], "rgba(76,195,255,0.0)", "rgba(76,195,255,0.18)"],
-                          "fill-outline-color": "rgba(76,195,255,0.5)" } });
-  map.addLayer({ id: "tiles-line", type: "line", source: "tiles",
-                 paint: { "line-color": ["case", ["boolean", ["feature-state", "sel"], false], "#ffffff", "rgba(76,195,255,0.7)"],
-                          "line-width": ["case", ["boolean", ["feature-state", "sel"], false], 2.4, 1.4], "line-dasharray": [2, 1] } });
+  // every tile in the county is drawn and classified: nothing on land is blank
+  const CLS_FILL = ["match", ["get", "cls"], "coastal", "rgba(0,122,255,0.16)", "low", "rgba(88,86,214,0.13)",
+                    "higher", "rgba(52,199,89,0.04)", "rgba(0,0,0,0)"];
+  const CLS_LINE = ["match", ["get", "cls"], "coastal", "rgba(0,122,255,0.35)", "low", "rgba(88,86,214,0.30)",
+                    "higher", "rgba(120,120,128,0.18)", "rgba(0,0,0,0)"];
+  map.addLayer({ id: "grid-fill", type: "fill", source: "grid", paint: { "fill-color": CLS_FILL } });
+  map.addLayer({ id: "grid-line", type: "line", source: "grid", paint: { "line-color": CLS_LINE, "line-width": 0.6 } });
+  map.addLayer({ id: "grid-hover", type: "line", source: "grid", filter: ["==", ["get", "id"], ""],
+                 paint: { "line-color": "#ffffff", "line-width": 1.6, "line-opacity": 0.8 } });
+  map.addLayer({ id: "sel-line", type: "line", source: "sel",
+                 paint: { "line-color": ["case", ["boolean", ["get", "dark"], false], "#ffffff", "#1c1c1e"], "line-width": 2, "line-dasharray": [2, 1.2] } });
   map.addLayer({ id: "buildings", type: "fill-extrusion", source: "buildings", minzoom: 13,
                  paint: { "fill-extrusion-color": ["case", [">", ["get", "d"], 0.3048], "#ff5468", [">", ["get", "d"], 0.05], "#ffb547", "#e9eef7"],
                           "fill-extrusion-height": ["case", [">", ["get", "d"], 0.3048], 9, 6],
@@ -88,13 +113,9 @@ map.on("load", async () => {
   map.addLayer({ id: "edits-line", type: "line", source: "edits",
                  paint: { "line-color": "#3ee6a8", "line-width": ["case", ["==", ["geometry-type"], "LineString"], 6, 2] } });
 
-  try {
-    const cat = await PF.getJSON("/tiles");
-    S.tiles = cat.tiles;
-    map.getSource("tiles").setData({ type: "FeatureCollection", features: cat.tiles.map((t, i) => ({
-      type: "Feature", id: i, properties: { id: t.id, place: t.place, buildings: t.buildings },
-      geometry: { type: "Polygon", coordinates: [[...t.corners, t.corners[0]]] } })) });
-  } catch (e) { console.warn(e); }
+  PF.getJSON("/grid").then((g) => map.getSource("grid").setData(g)).catch((e) => console.warn(e));
+  // street names stay readable above the flood overlay
+  ["labels", "lightref", "darkref"].forEach((id) => map.moveLayer(id, "buildings"));
   // countywide observed-flooding polygons straight from the county service (small layer)
   fetch(`${ORG}/PascoMapper_Storm/FeatureServer/6/query?where=1%3D1&outFields=*&outSR=4326&f=geojson`)
     .then((r) => r.json()).then((g) => map.getSource("observed").setData(g)).catch(() => {});
@@ -103,36 +124,39 @@ map.on("load", async () => {
   const rk = PF.params.get("result"); if (rk) showResult(rk).catch(() => {});
 });
 
-function featIndex(id) { return S.tiles.findIndex((t) => t.id === id); }
-let selIdx = -1;
 async function selectTile(tid, fly = true) {
-  if (selIdx >= 0) map.setFeatureState({ source: "tiles", id: selIdx }, { sel: false });
-  selIdx = featIndex(tid);
-  if (selIdx >= 0) map.setFeatureState({ source: "tiles", id: selIdx }, { sel: true });
+  if (!tid) {  // deselect
+    S.tile = null; S.corners = null; S.result = null; S.depth = null; clearOverlay();
+    map.getSource("sel").setData(empty); map.getSource("buildings").setData(empty); return;
+  }
   if (S.tile !== tid) {
     S.tile = tid; S.result = null; S.depth = null; clearOverlay();
-    const meta = S.tiles[selIdx] || (await PF.getJSON(`/tiles/${tid}`));
+    const meta = await PF.getJSON(`/tiles/${tid}?light=true`);
+    if (S.tile !== tid) return;
     S.corners = meta.corners;
+    map.getSource("sel").setData({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...S.corners, S.corners[0]]] } });
     PF.getJSON(`/tiles/${tid}/buildings`).then((g) => { S.bfc = g; colorBuildings(); }).catch(() => {});
     PF.getJSON(`/tiles/${tid}/layers/swfwmd_100yr`).then((g) => map.getSource("swfwmd").setData(g)).catch(() => {});
   }
   if (fly && S.corners) {
     const lons = S.corners.map((c) => c[0]), lats = S.corners.map((c) => c[1]);
     map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
-                  { padding: padding(), pitch: 58, bearing: -20, duration: 2200 });
+                  { padding: padding(), pitch: 35, bearing: 0, duration: 1800 });
   }
   drawEdits();
 }
 
 function padding() {
+  if (S.pad) return S.pad;
   const w = innerWidth, h = innerHeight, wide = w > 760;
-  return wide ? { top: 80, bottom: 60, left: Math.min(500, w * 0.38), right: 40 }
+  return wide ? { top: 70, bottom: 40, left: 40, right: 70 }
               : { top: Math.min(80, h * 0.12), bottom: Math.min(300, h * 0.42), left: 20, right: 20 };
 }
 function clearOverlay() {
   if (map.getLayer("depth")) map.removeLayer("depth");
   if (map.getSource("depth")) map.removeSource("depth");
   document.getElementById("legend").style.display = "none";
+  if (map.getLayer("grid-fill")) map.setPaintProperty("grid-fill", "fill-opacity", 1);
 }
 function colorBuildings() {
   if (!S.bfc) return;
@@ -163,6 +187,7 @@ async function showResult(key) {
   map.addLayer({ id: "depth", type: "raster", source: "depth", paint: { "raster-opacity": 0, "raster-opacity-transition": { duration: 1200 } } }, "buildings");
   requestAnimationFrame(() => map.setPaintProperty("depth", "raster-opacity", 0.9));
   document.getElementById("legend").style.display = "block";
+  map.setPaintProperty("grid-fill", "fill-opacity", 0.15);   // don't tint the flood depths
   S.edits = r.scenario.edits || S.edits; drawEdits(); colorBuildings();
 }
 
@@ -193,35 +218,66 @@ map.on("click", (e) => {
         const g = S.result.grids; info.mean_ft = +(PF.mm(g.mean)[k] / PF.FT).toFixed(2);
         info.p10_ft = +(PF.mm(g.p10)[k] / PF.FT).toFixed(2); info.p90_ft = +(PF.mm(g.p90)[k] / PF.FT).toFixed(2);
         new maplibregl.Popup({ closeButton: false, offset: 12 }).setLngLat(e.lngLat)
-          .setHTML(`<b style="font-size:15px">${info.mean_ft.toFixed(1)} ft</b> max depth<br><span style="color:#8aa2c2">p10 ${info.p10_ft.toFixed(1)} · p90 ${info.p90_ft.toFixed(1)} ft</span>`).addTo(map);
+          .setHTML(info.mean_ft < 0.1 ? `<b>Stays dry</b>` : `<b style="font-size:15px">${info.mean_ft.toFixed(1)} ft</b> of water<br><span class="sub">likely ${info.p10_ft.toFixed(1)}–${info.p90_ft.toFixed(1)} ft</span>`).addTo(map);
       }
       PF.send(info); return;
     }
   }
-  const f = map.queryRenderedFeatures(e.point, { layers: ["tiles-fill"] })[0];
-  if (f) { PF.send({ type: "selectTile", tile_id: f.properties.id }); selectTile(f.properties.id); return; }
-  PF.send({ type: "tapOutside", lonlat: [lng, lat] });
+  const f = map.queryRenderedFeatures(e.point, { layers: ["grid-fill"] })[0];
+  PF.send({ type: "tapOutside", lonlat: [lng, lat], cls: f ? f.properties.cls : "outside" });
 });
-map.on("mousemove", "tiles-fill", () => (map.getCanvas().style.cursor = "pointer"));
-map.on("mouseleave", "tiles-fill", () => (map.getCanvas().style.cursor = ""));
+// hover card for the county grid (desktop)
+const hover = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 14, className: "hov" });
+const CLS_TXT = { coastal: "Low-lying coast", low: "Low-lying ground", higher: "Higher ground", water: "Open water" };
+map.on("mousemove", "grid-fill", (e) => {
+  const p = e.features[0].properties;
+  map.getCanvas().style.cursor = "pointer";
+  map.setFilter("grid-hover", ["==", ["get", "id"], p.id]);
+  const z10 = p.z10 != null && p.z10 !== "null" ? " · low ground " + (p.z10 / 0.3048).toFixed(0) + " ft" : "";
+  hover.setLngLat(e.lngLat).setHTML("<b>" + (CLS_TXT[p.cls] || p.cls) + "</b><br><span class='sub'>"
+    + (+p.b || 0).toLocaleString() + " buildings · click to check this area</span>").addTo(map);
+});
+map.on("mouseleave", "grid-fill", () => { map.getCanvas().style.cursor = ""; map.setFilter("grid-hover", ["==", ["get", "id"], ""]); hover.remove(); });
 
-const LAYER_IDS = { fema: ["fema"], observed: ["observed", "observed-line"], swfwmd: ["swfwmd"], buildings: ["buildings"] };
+const LAYER_IDS = { fema: ["fema"], observed: ["observed", "observed-line"], swfwmd: ["swfwmd"], buildings: ["buildings"], grid: ["grid-fill", "grid-line"] };
+// appearance + basemap, driven by the app
+S.dark = false; S.style = "streets";
+function applyTheme() {
+  document.body.classList.toggle("dark", S.dark);
+  if (!map.getLayer("light")) return;
+  const sat = S.style === "satellite";
+  map.setLayoutProperty("light", "visibility", !sat && !S.dark ? "visible" : "none");
+  map.setLayoutProperty("darkst", "visibility", !sat && S.dark ? "visible" : "none");
+  map.setLayoutProperty("sat", "visibility", sat ? "visible" : "none");
+  map.setLayoutProperty("labels", "visibility", sat ? "visible" : "none");
+  map.setLayoutProperty("lightref", "visibility", !sat && !S.dark ? "visible" : "none");
+  map.setLayoutProperty("darkref", "visibility", !sat && S.dark ? "visible" : "none");
+  map.setTerrain(sat ? { source: "dem", exaggeration: 3 } : null);
+  if (map.getLayer("sel-line")) map.setPaintProperty("sel-line", "line-color", S.dark || sat ? "#ffffff" : "#1c1c1e");
+  if (map.getLayer("buildings")) map.setPaintProperty("buildings", "fill-extrusion-color",
+    ["case", [">", ["get", "d"], 0.3048], "#ff3b30", [">", ["get", "d"], 0.05], "#ff9f0a", S.dark || sat ? "#d1d1d6" : "#c7c7cc"]);
+}
 // messages can arrive before the style has loaded; queue them until then
 let styleReady = false;
 const pending = [];
 map.on("load", () => { styleReady = true; setTimeout(() => pending.splice(0).forEach(handle), 0); });
 PF.onMessage((m) => (styleReady ? handle(m) : pending.push(m)));
 async function handle(m) {
-  if (m.type === "load" && m.tile_id) selectTile(m.tile_id, m.fly !== false);
+  if (m.type === "theme") { S.dark = !!m.dark; S.style = m.style || "streets"; applyTheme(); }
+  if (m.type === "load") selectTile(m.tile_id || null, m.fly !== false);
+  if (m.type === "flyTo" && m.lonlat) map.flyTo({ center: m.lonlat, zoom: m.zoom || 15.5, pitch: 40, duration: 1800, essential: true, padding: padding() });
+  if (m.type === "home") map.flyTo({ center: [-82.70, 28.30], zoom: 10.4, pitch: 0, bearing: 0, duration: 1600 });
+  if (m.type === "padding") { S.pad = m.pad; }
   if (m.type === "result" && m.key) showResult(m.key);
   if (m.type === "clear") { S.result = null; S.depth = null; clearOverlay(); colorBuildings(); }
   if (m.type === "edits") { S.edits = m.edits || []; drawEdits(); }
   if (m.type === "layers") for (const [k, on] of Object.entries(m.layers || {}))
     (LAYER_IDS[k] || []).forEach((id) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", on ? "visible" : "none"));
+  if (m.type === "pin" && !m.lonlat) { S.marker?.remove(); S.marker = null; }
   if (m.type === "pin" && m.lonlat) {
     S.marker?.remove(); const el = document.createElement("div"); el.className = "pin";
     S.marker = new maplibregl.Marker({ element: el }).setLngLat(m.lonlat).addTo(map);
-    map.flyTo({ center: m.lonlat, zoom: 16.3, pitch: 62, duration: 2400, essential: true });
+    map.flyTo({ center: m.lonlat, zoom: 16.2, pitch: 40, duration: 2000, essential: true });
   }
   if (m.type === "terrain") map.setTerrain(m.on ? { source: "dem", exaggeration: m.exaggeration || 4 } : null);
 }

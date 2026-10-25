@@ -11,8 +11,9 @@
     --bg0: #050b16; --bg1: #0b1a2e; --ink: #e8f1ff; --muted: #8aa2c2; --line: rgba(160, 200, 255, 0.16);
     --glass: rgba(10, 22, 40, 0.72); --accent: #4cc3ff; --warn: #ffb547; --bad: #ff5468; --ok: #3ee6a8;
   }
+  body.light { --bg0: #e9edf3; --bg1: #f7f9fc; --ink: #1c1c1e; --muted: #5f6368; --line: rgba(60,60,67,.14); --glass: rgba(255,255,255,.92); --accent: #007aff; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(120% 90% at 50% 0%, var(--bg1), var(--bg0)); color: var(--ink);
-    font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif; -webkit-tap-highlight-color: transparent; }
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
   canvas { display: block; touch-action: none; }
   .glass { background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--line); border-radius: 14px; }
   #hud { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
@@ -40,13 +41,18 @@
   .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(76,195,255,.25); border-top-color: var(--accent); animation: sp 0.9s linear infinite; }
   @keyframes sp { to { transform: rotate(360deg); } }
   body.embed #title { display: none; }
+  body.embed #hud { top: 12px; right: 68px; }
+  body.embed #legend { left: 12px; right: auto; top: auto; bottom: 16px; }
+  body.embed #time { top: auto; bottom: 16px; left: 50%; transform: translateX(-50%); }
+  .seg button.on { background: var(--glass); box-shadow: 0 1px 3px rgba(0,0,0,.15); color: var(--ink); }
+  body.light .seg button.on { background: #fff; }
   body.embed #legend { left: auto; right: 12px; bottom: auto; top: 108px; }
   body.embed #time { bottom: auto; top: 12px; left: 50%; }
   @media (max-width: 760px) {
-    body.embed #time { top: 66px; left: 12px; right: 12px; transform: none; }
+    body.embed #hud { top: 56px; left: 12px; right: auto; align-items: flex-start; }
+    body.embed #legend { display: none; }
+    body.embed #time { bottom: auto; top: 150px; left: 12px; right: 68px; transform: none; }
     body.embed #time input { width: auto; flex: 1; }
-    body.embed #hud { top: 118px; }
-    body.embed #legend { top: 214px; }
   }
   @media (max-width: 560px) { #title { display: none; } #legend { min-width: 0; right: 12px; } input[type=range] { width: 90px; } }
 </style>
@@ -55,14 +61,14 @@
 <div id="title" class="glass"><div class="t" id="tname">Loading tile…</div><div class="s" id="tsub">Pasco Flood Screening · 3D</div></div>
 <div id="hud">
   <div class="seg glass" id="band">
-    <button data-k="p10">P10</button><button data-k="mean" class="on">Mean</button><button data-k="p90">P90</button>
+    <button data-k="p10">Less</button><button data-k="mean" class="on">Likely</button><button data-k="p90">More</button>
   </div>
   <div class="row glass">Relief <input id="exag" type="range" min="2" max="30" value="12"></div>
 </div>
 <div id="legend" class="glass">
-  <div>Max flood depth</div>
+  <div>Deepest water</div>
   <div class="bar"></div>
-  <div class="ticks"><span>0</span><span>0.5 ft</span><span>1 ft</span><span>2 ft</span><span>3+ ft</span><span>6.5 ft</span></div>
+  <div class="ticks"><span>2 in</span><span>6 in</span><span>1 ft</span><span>2 ft</span><span>3 ft+</span></div>
   <div class="keys"><span><i class="dot" style="background:#e9eef7"></i>Dry home</span><span><i class="dot" style="background:var(--warn)"></i>&lt; 1 ft</span><span><i class="dot" style="background:var(--bad)"></i>&gt; 1 ft</span><span><i class="dot" style="background:var(--ok)"></i>Project</span></div>
 </div>
 <div id="time" class="glass row"><button id="play">▶</button><input id="tslider" type="range" min="0" max="0" value="0"><span id="tlabel">—</span></div>
@@ -260,7 +266,7 @@ async function loadTile(tid) {
   S.tile = t; S.z = PF.f32(t.z_b64); S.zEff = S.z.slice(); S.coast = PF.u8(t.coast_b64);
   S.zmin = t.z_min; S.buildings = t.buildings; S.grids = {}; S.frames = null; S.result = null;
   $("tname").textContent = `${t.place} · ${t.id}`;
-  $("tsub").textContent = `${t.buildings.length.toLocaleString()} buildings · ground ${PF.fmtFt(t.z_min)} – ${PF.fmtFt(t.z_max)} NAVD88`;
+  $("tsub").textContent = `${t.buildings.length.toLocaleString()} buildings`;
   new THREE.TextureLoader().load(PF.api + t.imagery, (tex) => {
     tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; terrMat.map = tex; terrMat.needsUpdate = true;
   }, undefined, () => { terrMat.color.set(0x55705a); });
@@ -335,8 +341,8 @@ function showTip(ev, info) {
   if (!info) { tip.style.display = "none"; return; }
   let html;
   if (info.coast) html = `<b>Open water</b><div class="band">Gulf / tidal channel</div>`;
-  else if (info.mean_ft !== undefined) html = `<b>${info.mean_ft.toFixed(1)} ft</b> max depth<div class="band">p10 ${info.p10_ft.toFixed(1)} · p90 ${info.p90_ft.toFixed(1)} ft</div><div class="band">ground ${info.ground_ft.toFixed(1)} ft NAVD88</div>`;
-  else html = `<b>${info.ground_ft.toFixed(1)} ft</b> ground (NAVD88)<div class="band">run a scenario to see depth</div>`;
+  else if (info.mean_ft !== undefined) html = info.mean_ft < 0.1 ? `<b>Stays dry</b><div class="band">ground ${Math.round(info.ground_ft)} ft above sea level</div>` : `<b>${info.mean_ft.toFixed(1)} ft</b> of water<div class="band">likely ${info.p10_ft.toFixed(1)}–${info.p90_ft.toFixed(1)} ft</div><div class="band">ground ${Math.round(info.ground_ft)} ft above sea level</div>`;
+  else html = `<b>${Math.round(info.ground_ft)} ft</b> above sea level<div class="band">check this area to see flood depth</div>`;
   tip.innerHTML = html; tip.style.left = ev.clientX + "px"; tip.style.top = ev.clientY + "px"; tip.style.display = "block";
 }
 let down = null;
@@ -352,7 +358,14 @@ renderer.domElement.addEventListener("pointermove", (e) => {
   const p = pick(e); showTip(e, p && S.zEff ? cellInfo(p.r, p.c) : null);
 });
 
+function applyTheme(dark) {
+  document.body.classList.toggle("light", !dark);
+  scene.fog.color.set(dark ? 0x07111f : 0xe9edf3);
+  grid.material.color?.set?.(dark ? 0x1d3555 : 0xc9d2de);
+  slabMat.color.set(dark ? 0x0d1a2c : 0xd5dbe4);
+}
 PF.onMessage((m) => {
+  if (m.type === "theme") applyTheme(!!m.dark);
   if (m.type === "load" && m.tile_id && m.tile_id !== S.tile?.id) loadTile(m.tile_id).catch((e) => busy("Could not load tile: " + e.message));
   if (m.type === "result" && m.key) loadResult(m.key).catch((e) => busy("Could not load result: " + e.message));
   if (m.type === "clear") { S.grids = {}; S.frames = null; S.zEff = S.z?.slice(); $("time").style.display = "none"; updateTerrain(); }

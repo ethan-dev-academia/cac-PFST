@@ -13,8 +13,8 @@ Everything except training was built and tested on a laptop (PR #2, branch `pipe
 
 ## Goal and done criteria
 
-- `data/dataset/{train,test}/` holds about 3,000 scenarios (k = 0–2999, seed 2026) and `generate.log` shows no errors.
-- `models/fno.pt` exists, with best **held-out relative L2 of h_max below 0.10**. The held-out set is the 8 test tiles in `pfst/tiles.json`. IoU of the > 1 ft footprint and MAE are reported too.
+- `data/dataset/{train,test}/` holds about 3,000 scenarios (k = 0–2999, seed 2026, catalog `pfst/tiles.json` from coverage-v2) and `generate.log` shows no errors.
+- `models/fno.pt` exists, with best **held-out relative L2 of h_max below 0.10**. The held-out set is the 16 test tiles in `pfst/tiles.json`. IoU of the > 1 ft footprint and MAE are reported too.
 - Report back: the final metrics line, the epoch count, wall time, and the GPU used.
 
 ## Steps
@@ -31,15 +31,10 @@ python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_
 pytest                              # 17 tests, ~3 min; all must pass before going further
 ```
 
-### 2. Seed data (saves ~1.5 h)
-Download `seed_dataset_2026_k0-95.tgz` from the release
-https://github.com/ethan-dev-academia/cac-PFST/releases/tag/seed-dataset-2026-k0-95, then from the repo root run:
-```bash
-gh release download seed-dataset-2026-k0-95 -p '*.tgz' -D data/   # or download it in a browser into data/
-tar -xzf data/seed_dataset_2026_k0-95.tgz -C data/                # creates data/dataset/{train,test}/s00000..s00095.npz
-```
+### 2. No seed needed
+This machine generates the **whole** dataset itself. Scenario k is fully determined by `(seed 2026, k, pfst/tiles.json)`, so nothing has to be copied from the dev laptop. Ignore the old `seed-dataset-2026-k0-95` release; it was made with the retired 48-tile catalog.
 
-### 3. Generate the rest (CPU-bound, long-running)
+### 3. Generate the dataset (CPU-bound, long-running)
 The solver is pure numpy, and `SOLVER_SPEC.md` §9 requires that, so **the GPU does not help here**.
 - Each scenario takes about 60–120 s on one core.
 - Set `--workers` to the number of **physical** cores (`lscpu` on Linux: cores per socket × sockets). SMT threads make every job slower.
@@ -48,7 +43,7 @@ nohup python -m pfst.generate --n 3000 --workers <physical_cores> > data/generat
 ```
 - **Resumable:** the generator skips files that already exist, so re-run the same command after any interruption.
 - **Progress:** `tail data/dataset/generate.log`. Errors appear as `error:` lines; `grep -c error data/dataset/generate.log` should print 0.
-- **Expect** about `3000 × 90 s / cores` (roughly 4 h on 16 cores). DEM tiles download on first use, which needs internet.
+- **Expect** about `3000 × 90 s / cores` from k = 0 (roughly 4 h on 16 cores). DEM tiles download on first use, which needs internet.
 - **To train sooner:** a first model can start once about 1,000 samples exist. The full set is the target.
 
 ### 4. Train
@@ -82,7 +77,7 @@ curl -X POST localhost:8000/predict -H 'content-type: application/json' \
 
 ## Rules
 - **Do not modify** `floodsolver/`, `tests/test_solver.py` or `SOLVER_SPEC.md`. The spec is a binding contract; report problems instead of patching.
-- **Do not change** `--seed` (2026) or the scenario sampler in `pfst/generate.py` mid-run. Sample k is defined by `(seed, k)`, and mixing definitions corrupts the dataset.
+- **Do not change** `--seed` (2026), `pfst/tiles.json` or the scenario sampler in `pfst/generate.py` mid-run. Sample k is defined by `(seed, k)`, and mixing definitions corrupts the dataset.
 - Code changes, such as to training, go on a branch with a PR. Commits carry **no Co-Authored-By or "Generated with Claude" lines**.
 - Ask before deleting `data/dataset/` or anything else long-running.
 
@@ -90,3 +85,11 @@ curl -X POST localhost:8000/predict -H 'content-type: application/json' \
 - `neuraloperator` adds a `_metadata` key to state dicts. `training/model.py` already strips it on load.
 - Deep `h_max` values (4–7 m) are real. They come from excavated retention ponds filling up, and from below-sea-level land under high surge.
 - The FNO doesn't take culvert edits; ponds and raised roads reach it through the `dz` channel. The API ignores culverts when the FNO backend is active.
+
+## Serving the app from this machine (optional)
+The dev laptop only does app development. Until `models/fno.pt` exists, every app scenario runs the numpy solver, which takes about 2 min of several cores. To keep that work here, run the API on this machine:
+```bash
+pip install -r requirements-api.txt
+uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+Then on the laptop start the app with `EXPO_PUBLIC_API_URL=http://<this-machine-ip>:8000 npx expo start`. Once the model is trained, inference is light enough to run anywhere.

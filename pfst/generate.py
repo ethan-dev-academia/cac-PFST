@@ -39,7 +39,8 @@ def sample(k, seed, catalog):
         z = synthetic.synthetic_tile(rng)
         meta = {"tile": f"synthetic-{k}", "synthetic": True, "split": "train"}
     else:
-        t = catalog[rng.integers(len(catalog))]
+        w = np.array([t.get("weight", 1.0) for t in catalog], float)
+        t = catalog[rng.choice(len(catalog), p=w / w.sum())]
         z = dem.load_tile(t["id"])
         meta = {"tile": t["id"], "synthetic": False, "split": t["split"]}
     coast = tiles.surge_mask(z)

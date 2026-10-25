@@ -101,3 +101,10 @@ export function estimateCost(edits: Edit[]) {
   }
   return Math.round(usd / 1000) * 1000;
 }
+
+/** Full-screen "watch it flood": load a result and hand the screen to the map / 3D view. */
+export async function watchFlood(key: string, title: string, sub: string, view: "3d" | "map" = "3d") {
+  const p = await getPrediction(key);
+  if (!p) return;
+  useStore.getState().set({ tileId: p.tile_id, baseline: p, project: null, showing: "baseline", view, showcase: { title, sub, key } });
+}

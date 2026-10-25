@@ -41,6 +41,13 @@
   .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(76,195,255,.25); border-top-color: var(--accent); animation: sp 0.9s linear infinite; }
   @keyframes sp { to { transform: rotate(360deg); } }
   body.embed #title { display: none; }
+  #caption { position: absolute; left: 16px; top: 68px; padding: 14px 18px; display: none; max-width: min(420px, calc(100% - 100px)); }
+  #captitle { font-size: 22px; font-weight: 700; letter-spacing: .01em; }
+  #capsub { font-size: 14px; color: var(--muted); margin-top: 3px; }
+  #capcount { font-size: 15px; font-weight: 600; margin-top: 10px; color: var(--accent); }
+  body.showcase #caption { display: block; }
+  body.showcase #hud, body.showcase #legend { display: none; }
+  @media (max-width: 760px) { #caption { top: 112px; left: 12px; } #captitle { font-size: 18px; } }
   body.embed #hud { top: 12px; right: 68px; }
   body.embed #legend { left: 12px; right: auto; top: auto; bottom: 16px; }
   body.embed #time { top: auto; bottom: 16px; left: 50%; transform: translateX(-50%); }
@@ -51,7 +58,7 @@
   @media (max-width: 760px) {
     body.embed #hud { top: 56px; left: 12px; right: auto; align-items: flex-start; }
     body.embed #legend { display: none; }
-    body.embed #time { bottom: auto; top: 150px; left: 12px; right: 68px; transform: none; }
+    body.embed #time { bottom: auto; top: 58px; left: 12px; right: 68px; transform: none; }
     body.embed #time input { width: auto; flex: 1; }
   }
   @media (max-width: 560px) { #title { display: none; } #legend { min-width: 0; right: 12px; } input[type=range] { width: 90px; } }
@@ -73,6 +80,7 @@
 </div>
 <div id="time" class="glass row"><button id="play">▶</button><input id="tslider" type="range" min="0" max="0" value="0"><span id="tlabel">—</span></div>
 <div id="tip" class="glass"></div>
+<div id="caption" class="glass"><div id="captitle"></div><div id="capsub"></div><div id="capcount"></div></div>
 <div id="busy"><div class="card glass"><div class="spin"></div><span id="busytext">Loading terrain…</span></div></div>
 
 <script src="common.js"></script>
@@ -284,12 +292,13 @@ async function loadResult(key) {
   const dz = PF.f32(r.dz_b64); S.zEff = S.z.map((v, k) => v + dz[k]);
   S.surgeM = r.scenario.surge_ft * PF.FT;
   if (r.frames) {
-    S.frames = r.frames.grids.map(PF.mm); S.frameT = r.frames.t_h; S.frameIdx = -1;
-    $("time").style.display = "flex"; $("tslider").max = S.frames.length; $("tslider").value = S.frames.length;
-    $("tlabel").textContent = "Peak";
+    S.frames = r.frames.grids.map(PF.mm); S.frameT = r.frames.t_h; S.frameIdx = 0;
+    $("time").style.display = "flex"; $("tslider").max = S.frames.length; $("tslider").value = 0;
+    $("tlabel").textContent = `Hour ${Math.round(S.frameT[0])}`;
   } else { S.frames = null; $("time").style.display = "none"; }
   S.edits = r.scenario.edits || S.edits;
   busy(null);
+  if (S.frames && visible) setTimeout(() => playStorm(), 900);
   // "rise" animation on arrival
   S.rise = 0; const t0 = performance.now();
   (function grow() { S.rise = Math.min(1, (performance.now() - t0) / 1400); S.rise = 1 - Math.pow(1 - S.rise, 3);
@@ -305,17 +314,26 @@ document.querySelectorAll("#band button").forEach((b) => b.onclick = () => {
 $("exag").oninput = (e) => { S.exag = +e.target.value; updateTerrain(); };
 let playing = null;
 $("tslider").oninput = (e) => setFrame(+e.target.value);
+function homesWet() {
+  const h = depthField(); if (!h) return 0;
+  let n = 0; for (const [r, c] of S.buildings) if (h[cellAt(r, c)] > PF.FT) n++;
+  return n;
+}
 function setFrame(i) {
   if (!S.frames) return;
   S.frameIdx = i >= S.frames.length ? -1 : i;
-  $("tlabel").textContent = S.frameIdx < 0 ? "Peak" : `t = ${S.frameT[i].toFixed(1)} h`;
+  $("tlabel").textContent = S.frameIdx < 0 ? "Peak" : `Hour ${Math.round(S.frameT[i])}`;
   updateWater(); updateBuildings();
+  const n = homesWet();
+  $("capcount").textContent = `${n} home${n === 1 ? "" : "s"} with 1 ft+ of water`;
 }
-$("play").onclick = () => {
-  if (playing) { clearInterval(playing); playing = null; $("play").textContent = "▶"; return; }
-  $("play").textContent = "❚❚"; let i = 0;
-  playing = setInterval(() => { setFrame(i); $("tslider").value = i; i++; if (i > S.frames.length) { clearInterval(playing); playing = null; $("play").textContent = "▶"; } }, 260);
-};
+function stopStorm() { if (playing) { clearInterval(playing); playing = null; } $("play").textContent = "▶"; }
+function playStorm() {
+  if (!S.frames) return;
+  stopStorm(); $("play").textContent = "❚❚"; let i = 0;
+  playing = setInterval(() => { setFrame(i); $("tslider").value = i; i++; if (i > S.frames.length) stopStorm(); }, 220);
+}
+$("play").onclick = () => (playing ? stopStorm() : playStorm());
 
 // picking
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -366,6 +384,13 @@ function applyTheme(dark) {
 }
 PF.onMessage((m) => {
   if (m.type === "theme") applyTheme(!!m.dark);
+  if (m.type === "play") playStorm();
+  if (m.type === "showcase") {
+    document.body.classList.toggle("showcase", !!m.on);
+    $("captitle").textContent = m.title || ""; $("capsub").textContent = m.sub || "";
+    controls.autoRotate = !!m.on; controls.autoRotateSpeed = 0.6;
+    if (m.on) { camera.position.set(-95, 70, 120); if (S.frames) setTimeout(playStorm, 600); }
+  }
   if (m.type === "load" && m.tile_id && m.tile_id !== S.tile?.id) loadTile(m.tile_id).catch((e) => busy("Could not load tile: " + e.message));
   if (m.type === "result" && m.key) loadResult(m.key).catch((e) => busy("Could not load result: " + e.message));
   if (m.type === "clear") { S.grids = {}; S.frames = null; S.zEff = S.z?.slice(); $("time").style.display = "none"; updateTerrain(); }
@@ -385,7 +410,11 @@ function frame() {
 // the app hides this view (opacity 0) when the map is showing: stop rendering then
 let visible = PF.params.get("hidden") !== "1";
 renderer.setAnimationLoop(visible ? frame : null);
-PF.onMessage((m) => { if (m.type === "visible") { visible = !!m.on; renderer.setAnimationLoop(visible ? frame : null); } });
+PF.onMessage((m) => {
+  if (m.type !== "visible") return;
+  const was = visible; visible = !!m.on; renderer.setAnimationLoop(visible ? frame : null);
+  if (visible && !was && S.frames) setTimeout(playStorm, 500);   // switching to 3D replays the storm
+});
 
 const tid = PF.params.get("tile");
 if (tid) loadTile(tid).catch((e) => busy("Could not load tile: " + e.message));

@@ -267,6 +267,55 @@ def point_info(lon: float, lat: float):
     return out
 
 
+# Featured flood scenarios for the app's "See it in action" gallery. Computed once, then cached.
+SHOWCASES = [
+    {"id": "helene-port-richey", "title": "Helene-level surge", "place": "Port Richey waterfront",
+     "blurb": "A 7.6 ft storm tide pushes up the canals and into the streets.",
+     "lonlat": [-82.7375, 28.2745], "request": {"return_period": 2, "surge_ft": 7.62}},
+    {"id": "hudson-hurricane", "title": "Hurricane surge + heavy rain", "place": "Hudson coast",
+     "blurb": "Surge and a 1-in-25 rain together, on the lowest ground in the county.",
+     "lonlat": [-82.708, 28.364], "request": {"return_period": 25, "surge_ft": 7.62}},
+    {"id": "severe-port-richey", "title": "Severe rainstorm", "place": "Downtown Port Richey",
+     "blurb": "13 inches of rain in a day: watch the low streets fill first.",
+     "lonlat": [-82.7113, 28.2760], "request": {"return_period": 100}},
+    {"id": "severe-holiday", "title": "Severe rainstorm", "place": "Holiday",
+     "blurb": "Dense neighbourhoods with nowhere for the water to go.",
+     "lonlat": [-82.76, 28.19], "request": {"return_period": 100}},
+]
+
+
+def _showcase_req(sc):
+    return PredictRequest(tile_id=geo.analysis_tile_for_lonlat(*sc["lonlat"]), frames=True, **sc["request"])
+
+
+@app.get("/showcases")
+def showcases():
+    out = []
+    for sc in SHOWCASES:
+        req = _showcase_req(sc)
+        key = _key(req)
+        cached = CACHE / f"{key}.json"
+        stats = None
+        if cached.exists():
+            r = json.loads(cached.read_text())
+            stats = {"homes": r["stats"]["mean"]["homes_flagged"], "acres": r["stats"]["mean"]["area_over_1ft_acres"]}
+        out.append({**{k: sc[k] for k in ("id", "title", "place", "blurb")}, "tile_id": req.tile_id, "key": key,
+                    "request": req.model_dump(), "ready": cached.exists(), "stats": stats,
+                    "thumb": f"/tiles/{req.tile_id}/imagery.jpg"})
+    return {"showcases": out}
+
+
+@app.post("/showcases/warm")
+def warm_showcases():
+    """Start computing any showcase that isn't cached yet (solver backend: a few minutes each)."""
+    started = []
+    for sc in SHOWCASES:
+        r = predict(_showcase_req(sc))
+        if r.get("status") != "done":
+            started.append(sc["id"])
+    return {"started": started}
+
+
 @app.get("/presets")
 def presets():
     return {

@@ -37,7 +37,10 @@ def png_b64(rgba, scale=4):
 
 
 def depth_png_b64(h, scale=4):
-    return png_b64(depth_rgba(h), scale)
+    """Smooth water look: bilinear-upsample the depth field first, then colour (no blocky cells)."""
+    from scipy import ndimage
+    hs = np.clip(ndimage.zoom(np.asarray(h, float), scale, order=1), 0, None)
+    return png_b64(depth_rgba(hs), 1)
 
 
 def grid_mm_b64(h):

@@ -6,14 +6,14 @@ Brief for a Claude Code session on the training machine. Read this, then `CLAUDE
 
 Pasco Flood Screening Tool. A numpy overland-flow solver (`floodsolver/`) produces synthetic flood runs on real lidar tiles, and a Fourier Neural Operator learns to imitate it. A FastAPI backend and an Expo app serve the predictions.
 
-Everything except training was built and tested on a laptop (PR #2, branch `pipeline-v1`). **This machine's job:**
+Everything except training was built and tested on a laptop and is on `main` (PRs #2 and #3). **This machine's job:**
 1. Finish generating the dataset.
 2. Train the FNO.
 3. Hand back `models/fno.pt`.
 
 ## Goal and done criteria
 
-- `data/dataset/{train,test}/` holds about 3,000 scenarios (k = 0–2999, seed 2026, catalog `pfst/tiles.json` from coverage-v2) and `generate.log` shows no errors.
+- `data/dataset/{train,test}/` holds about 3,000 scenarios (k = 0–2999, seed 2026, catalog `pfst/tiles.json` on main) and `generate.log` shows no errors.
 - `models/fno.pt` exists, with best **held-out relative L2 of h_max below 0.10**. The held-out set is the 16 test tiles in `pfst/tiles.json`. IoU of the > 1 ft footprint and MAE are reported too.
 - Report back: the final metrics line, the epoch count, wall time, and the GPU used.
 
@@ -22,7 +22,7 @@ Everything except training was built and tested on a laptop (PR #2, branch `pipe
 ### 1. Setup
 ```bash
 git clone https://github.com/ethan-dev-academia/cac-PFST && cd cac-PFST
-git checkout pipeline-v1            # or main, if PR #2 is merged
+git checkout main
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pip install torch --index-url https://download.pytorch.org/whl/cu<XYZ>   # match the CUDA driver (nvidia-smi)

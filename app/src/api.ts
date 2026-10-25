@@ -39,6 +39,10 @@ export interface PointInfo {
   tile_id: string; cell: Cell | null; cls: TileClass; ground_ft: number | null;
   fema: { zone: string | null; subtype: string | null; sfha: boolean; bfe_ft: number | null } | null;
 }
+export interface Showcase {
+  id: string; title: string; place: string; blurb: string; tile_id: string; key: string; ready: boolean;
+  request: any; stats: { homes: number; acres: number } | null; thumb: string;
+}
 export interface GeocodeResult { label: string; lon: number; lat: number; tile_id: string; cell: Cell | null; source: string }
 
 async function j<T>(path: string, init?: RequestInit): Promise<T> {
@@ -55,6 +59,7 @@ export const api = {
   health: () => j<{ ok: boolean; backend: string; info: any }>("/health"),
   tiles: () => j<{ tiles: TileSummary[] }>("/tiles"),
   presets: () => j<Presets>("/presets"),
+  showcases: () => j<{ showcases: Showcase[] }>("/showcases"),
   point: (lon: number, lat: number) => j<PointInfo>(`/point?lon=${lon}&lat=${lat}`),
   job: (key: string) => j<Prediction | Running>(`/jobs/${key}`),
   tileMeta: (tid: string) => j<TileSummary>(`/tiles/${tid}?light=true`),

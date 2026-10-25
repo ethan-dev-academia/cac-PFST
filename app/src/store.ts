@@ -68,6 +68,8 @@ interface State extends Persisted {
   tapInfo: any | null;
   sheetOpen: boolean;
   focus: { lonlat: [number, number]; cell: [number, number] | null; tileId: string; t: number } | null;
+  showcase: { title: string; sub: string; key: string } | null;
+  replay: number;
   set: (p: Partial<State>) => void;
   addEdit: (e: Edit) => void;
   undoEdit: () => void;
@@ -111,6 +113,8 @@ export const useStore = create<State>()(persist((set) => ({
   tapInfo: null,
   sheetOpen: true,
   focus: null,
+  showcase: null,
+  replay: 0,
   set: (p) => set(p),
   addEdit: (e) => set((s) => ({ edits: [...s.edits, e], project: null })),
   undoEdit: () => set((s) => ({ edits: s.edits.slice(0, -1), project: null })),

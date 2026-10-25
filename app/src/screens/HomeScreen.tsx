@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { api, GeocodeResult, Prediction } from "../api";
+import { Gallery } from "../components/Gallery";
 import { SearchBar, titleCase } from "../components/SearchBar";
 import { levelFor, riskColor, SCENARIOS } from "../risk";
 import { analyzePlace, getPrediction, placeDepth } from "../services";
@@ -66,6 +67,7 @@ export function HomeScreen() {
     <View style={{ gap: 22 }}>
       <Header title="Places" subtitle="How deep would floodwater get at the places you care about?" />
       <SearchBar onPick={addPlace} />
+      <Gallery />
       {st.places.length === 0 ? (
         <Empty icon="home-outline" title="Add your home"
           body="Search your address above. We'll check it against a heavy storm, a severe storm and a hurricane surge, and explain what the depth means for you." />

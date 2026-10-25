@@ -75,11 +75,11 @@ class FNOPredictor:
 def _solve_member(args):
     z, rain_in, surge_ft, edits, coast, record = args
     res, inp = scenario.solve(z, rain_in, surge_ft, edits, coast=coast,
-                              record_every=1800 if record else None)
+                              record_every=1200 if record else None)   # 20-min frames for the flood animation
     h = scenario.depth_above_ground(res, z, inp)
     frames = None
     if record:
-        frames = [(t, np.where(coast, 0.0, hh)) for t, hh in res.snapshots if t >= 8 * 3600]
+        frames = [(t, np.where(coast, 0.0, hh)) for t, hh in res.snapshots if t >= 7 * 3600]
     return h, frames
 
 

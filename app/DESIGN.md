@@ -44,6 +44,15 @@ Never block the whole UI with a spinner.
 - **Layers:** extra layers are off by default; each view turns on only what it needs.
 - **Basemap:** follows the appearance (light streets / dark streets); satellite is one tap away.
 
+## 8b. Show the water, not just the numbers
+Flooding is a visual story. Every result offers **Watch it flood**:
+- a full-screen view with the panels hidden;
+- the storm played hour by hour in 3D or on the map;
+- buildings turning orange, then red, as the water reaches them;
+- a live count of homes with 1 ft+ of water.
+
+The "See it in action" gallery puts finished, real-street floods one tap away. Numbers support the picture; they don't replace it.
+
 ## 9. Spacing and type
 - **Spacing:** a 4 pt grid (8, 12, 16, 24 between groups).
 - **Grouped lists:** iOS-style inset groups (rounded, hairline separators) on both platforms.

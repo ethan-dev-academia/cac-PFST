@@ -3,7 +3,7 @@ import { Alert, Platform, Pressable, TextInput, View } from "react-native";
 import { api } from "../api";
 import { titleCase } from "../components/SearchBar";
 import { ACTIONS, depthWords, femaText, levelFor, riskColor, SCENARIOS } from "../risk";
-import { analyzePlace, placeDepth } from "../services";
+import { analyzePlace, placeDepth, watchFlood } from "../services";
 import { Place, useStore } from "../store";
 import { useTheme, useType } from "../theme";
 import { Button, Card, Disclosure, Group, Header, Icon, IconName, Progress, RiskTag, Row, Ruler, Txt } from "../ui";
@@ -100,10 +100,16 @@ export function PlaceScreen({ place, onShowOnMap }: { place: Place; onShowOnMap:
         })}
       </Group>
 
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <Button title="View on map" icon="map" kind="tinted" disabled={!mapKey} onPress={() => onShowOnMap(mapKey!, "map")} style={{ flex: 1 }} />
-        <Button title="See in 3D" icon="cube" kind="tinted" disabled={!mapKey} onPress={() => onShowOnMap(mapKey!, "3d")} style={{ flex: 1 }} />
-      </View>
+      {mapKey && (
+        <View style={{ gap: 10 }}>
+          <Button title="Watch it flood" icon="play" onPress={() => {
+            const k = (w && place.results[w.key]) || mapKey;
+            const sc = SCENARIOS.find((x) => place.results[x.key] === k);
+            watchFlood(k, place.name, sc ? `${sc.title} · ${street}` : street);
+          }} />
+          <Button title="View on map" icon="map" kind="tinted" onPress={() => onShowOnMap(mapKey, "map")} />
+        </View>
+      )}
 
       <Group title="This address">
         {fema ? <Row icon="shield-checkmark" iconBg={place.info?.fema?.sfha ? "#FF9500" : "#34C759"} title={fema.title} subtitle={fema.body} />

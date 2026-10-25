@@ -1,6 +1,8 @@
 import { Switch, View } from "react-native";
 import { api } from "../api";
+import { Gallery } from "../components/Gallery";
 import { Slider } from "../components/Slider";
+import { watchFlood } from "../services";
 import { useStore } from "../store";
 import { useTheme } from "../theme";
 import { Button, Card, Disclosure, Empty, Group, Header, Progress, Row, Segmented, Txt } from "../ui";
@@ -65,6 +67,7 @@ export function ExploreScreen() {
     return (
       <View style={{ gap: 22 }}>
         <Header title="Explore" subtitle="Check any neighbourhood in Pasco." />
+        <Gallery />
         <Card>
           <Empty icon="hand-left-outline" title="Tap anywhere on the map"
             body="We'll check the 1.3 km area around that spot. Blue shading marks low-lying ground where floods start." />
@@ -86,8 +89,10 @@ export function ExploreScreen() {
             ? `No homes here get more than a foot of water in ${stormWords(st.baseline.scenario.return_period, st.baseline.scenario.surge_ft, tide)}.`
             : `In ${stormWords(st.baseline.scenario.return_period, st.baseline.scenario.surge_ft, tide)}, about ${b.mean.homes_flagged} homes here get more than a foot of water.`}</Txt>
           <Txt v="subhead" color="label2">{b.mean.homes_flagged > 0 ? `Likely between ${b.p10.homes_flagged} and ${b.p90.homes_flagged}, out of ${b.homes_total.toLocaleString()} buildings. ` : ""}{b.mean.area_over_1ft_acres} acres are under more than a foot of water at the peak.</Txt>
+          <Button title="Watch it flood" icon="play" onPress={() => watchFlood(st.baseline!.key, `${tile?.place ?? "This"} area`,
+            stormWords(st.baseline!.scenario.return_period, st.baseline!.scenario.surge_ft, tide).replace(/^a /, "A "))} />
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-            <Button small kind="tinted" icon="cube" title="See in 3D" onPress={() => st.set({ view: "3d" })} />
+            <Button small kind="tinted" icon="refresh" title="Replay on map" onPress={() => st.set({ replay: Date.now() })} />
             <Button small kind="tinted" icon="document-text" title="Report" onPress={() => st.set({ screen: "report" })} />
             <Button small kind="tinted" icon="construct" title="Plan a fix here" onPress={() => {
               newProject(); const p = useStore.getState().projects[0];
@@ -118,7 +123,7 @@ export function ExploreScreen() {
         </View>
       </Group>
 
-      {!st.running && <Button title={st.baseline ? "Run again" : "Check this area"} icon="play" onPress={runArea} />}
+      {!st.running && <Button title={st.baseline ? "Run again" : "Check this area"} icon={st.baseline ? "refresh" : "play"} kind={st.baseline ? "tinted" : "filled"} onPress={runArea} />}
       {st.error && <Txt v="footnote" color="bad">{st.error}</Txt>}
 
       <Layers />

@@ -1,5 +1,5 @@
 import { Pressable, TextInput, View } from "react-native";
-import { analyzeProject, costPerHome, estimateCost, getPrediction, money, removed } from "../services";
+import { analyzeProject, costPerHome, estimateCost, getPrediction, money, removed, watchFlood } from "../services";
 import { Project, uid, useStore } from "../store";
 import { useTheme, useType } from "../theme";
 import { Button, Card, Empty, Group, Header, Icon, Progress, Row, Segmented, Txt } from "../ui";
@@ -92,6 +92,8 @@ function ProjectEditor({ p, onRunDone }: { p: Project; onRunDone: () => void }) 
               </Txt>
               {!!p.inFootprint && <Txt v="footnote" color="bad">The pond covers {p.inFootprint} building{p.inFootprint > 1 ? "s" : ""}. Move it to an open lot, or budget to buy them.</Txt>}
               {r != null && r <= 0 && <Txt v="footnote" color="label2">Try a pond where water collects just upstream of the flooded homes, or raise the road that traps water.</Txt>}
+              {p.projectKey && <Button title="Watch it flood with the project" icon="play"
+                onPress={() => watchFlood(p.projectKey!, p.name, `${p.place} area · with the project`)} />}
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <Segmented value={st.showing} onChange={(v) => st.set({ showing: v })} style={{ flex: 1 }}
                   options={[{ value: "baseline", label: "Today" }, { value: "project", label: "With project" }]} />

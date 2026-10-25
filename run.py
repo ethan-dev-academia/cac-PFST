@@ -32,14 +32,16 @@ def _venv_python():
 
 
 def main():
-    model = ROOT / "models" / "fno.pt"
-    if not model.exists():
-        print("note: models/fno.pt not found — the app will run the slower physics solver.")
+    model = next((ROOT / "models" / n for n in ("fno.pt", "fno_fp16.pt")
+                  if (ROOT / "models" / n).exists()), None)
+    if model is None:
+        print("note: no model in models/ — the app will run the slower physics solver.")
         print("      get the trained model with:  python scripts/fetch_model.py")
 
     py = _venv_python()
     env = dict(os.environ)
-    env.setdefault("PFST_MODEL", str(model))
+    if model is not None:
+        env.setdefault("PFST_MODEL", str(model))
     print(f"starting the flood service on http://localhost:{PORT} ...")
     proc = subprocess.Popen([py, "-m", "uvicorn", "api.main:app", "--port", str(PORT)],
                             cwd=str(ROOT), env=env)

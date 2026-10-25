@@ -37,10 +37,13 @@ export interface Project {
   updatedAt: number;
 }
 
-interface Persisted { places: Place[]; projects: Project[]; seenIntro: boolean }
+export type Appearance = "system" | "light" | "dark";
+export type MapStyle = "streets" | "satellite";
+interface Persisted { places: Place[]; projects: Project[]; seenIntro: boolean; appearance: Appearance; mapStyle: MapStyle }
 
 interface State extends Persisted {
   tab: Tab;
+  sheet: "peek" | "half" | "full";
   view: View;
   screen: "main" | "report";
   openPlaceId: string | null;
@@ -80,6 +83,9 @@ export const useStore = create<State>()(persist((set) => ({
   places: [],
   projects: [],
   seenIntro: false,
+  appearance: "system",
+  mapStyle: "streets",
+  sheet: "half",
   tab: "home",
   view: "map",
   screen: "main",
@@ -115,5 +121,5 @@ export const useStore = create<State>()(persist((set) => ({
 }), {
   name: "pfst-v1",
   storage: createJSONStorage(() => AsyncStorage),
-  partialize: (s): Persisted => ({ places: s.places, projects: s.projects, seenIntro: s.seenIntro }),
+  partialize: (s): Persisted => ({ places: s.places, projects: s.projects, seenIntro: s.seenIntro, appearance: s.appearance, mapStyle: s.mapStyle }),
 }));

@@ -2,15 +2,14 @@
 import { forwardRef, useImperativeHandle, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView as RNWebView } from "react-native-webview";
-import { C } from "../theme";
 
 // react-native-webview 14 ships class-component typings that React 19.3 types reject
 const WebView = RNWebView as any;
 
 export interface VizHandle { post: (msg: object) => void }
-interface Props { url: string; onMessage: (msg: any) => void; visible: boolean }
+interface Props { url: string; onMessage: (msg: any) => void; visible: boolean; bg?: string }
 
-export const VizFrame = forwardRef<VizHandle, Props>(function VizFrame({ url, onMessage, visible }, ref) {
+export const VizFrame = forwardRef<VizHandle, Props>(function VizFrame({ url, onMessage, visible, bg = "#000" }, ref) {
   const wv = useRef<any>(null);
   useImperativeHandle(ref, () => ({
     post: (msg) => wv.current?.injectJavaScript(`window.__recv && window.__recv(${JSON.stringify(JSON.stringify(msg))}); true;`),
@@ -20,7 +19,7 @@ export const VizFrame = forwardRef<VizHandle, Props>(function VizFrame({ url, on
       <WebView
         ref={wv}
         source={{ uri: url }}
-        style={{ flex: 1, backgroundColor: C.bg0 }}
+        style={{ flex: 1, backgroundColor: bg }}
         originWhitelist={["*"]}
         javaScriptEnabled
         domStorageEnabled

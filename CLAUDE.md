@@ -21,6 +21,7 @@ Pasco Flood Screening Tool: a numpy overland-flow solver generates synthetic run
 - `pfst/` data pipeline, `training/` FNO, `api/` FastAPI (+ `api/static/` MapLibre and three.js pages), `app/` Expo. See README "Running it".
 - Tests: `pytest` (solver contract + offline pipeline tests). App: `cd app && npx tsc --noEmit`.
 - The visual layer is plain HTML served by the API at `/viz`. The app embeds it (WebView native, iframe web) and talks over postMessage (`api/static/common.js`). Visual changes go in `api/static/`, not in React Native.
+- **UI rules:** read `app/DESIGN.md` before touching the app. In short: answer first, plain words (no tile ids, p10/p90, NAVD88 in primary UI), follow the platform (Mac sidebar / iPhone bottom sheet), colour only for the risk scale and the one primary action. Build screens from `src/ui.tsx` and theme tokens in `src/theme.ts`; no ad-hoc colours or font sizes.
 - **App navigation:** tabs are plain state in `src/store.ts`, not Expo Router (despite `app/AGENTS.md`). The map and 3D WebViews must stay mounted across tabs (WebGL state), so screens render as panels over or beside them.
 - **Coverage:** `pfst/grid.json` (county classification, `python -m pfst.county`) drives the map; `pfst/tiles.json` (training catalog, `python -m pfst.tiles build`) drives the dataset. Rebuilding either changes the dataset definition, so regenerate the seed set after.
 - MapLibre gotcha: `raster-resampling: "nearest"` renders RGBA image/canvas overlays black. Don't use it.

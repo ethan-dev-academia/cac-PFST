@@ -24,7 +24,7 @@ The idea comes from the PINO paper: a Fourier Neural Operator trained on our own
 | Dataset `python -m pfst.generate` | Seeded. 96-scenario seed set made locally; the full 3,000 runs on the GPU box (`training/README.md`) |
 | FNO training `training/` | Ready, not trained. Smoke-tested end to end; the API loads its checkpoint |
 | API `api/` | Done. FastAPI; runs the solver as a fallback until `models/fno.pt` exists |
-| App `app/` | Done. Expo (iOS / Android / web-desktop). Tabs: My places (saved addresses with plain-language risk, FEMA zone, what to do), Explore (county map + 3D), Plan (projects, cost per home protected, ranking, memo), About |
+| App `app/` | Done. "Pasco Flood Check", Expo (iOS / Android / web-desktop), designed to `app/DESIGN.md`. Mac: sidebar + map; iPhone: map + bottom sheet; light/dark. Places (saved addresses, plain-language risk, FEMA zone, what to do), Explore (any area, storm + surge), Projects (ponds / raised roads, homes kept dry, cost per home, ranking, PDF memo), Settings |
 
 ## Architecture
 

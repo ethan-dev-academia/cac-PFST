@@ -1,66 +1,55 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { View } from "react-native";
 import { useStore } from "../store";
-import { C } from "../theme";
-import { Card, Icon, IconName, Pill, SectionTitle, T } from "../ui";
-
-const STEPS: { icon: IconName; t: string; d: string }[] = [
-  { icon: "layers-outline", t: "Real terrain", d: "2018 SWFWMD lidar for Pasco, resampled to 10 m cells in 1.3 km tiles. Building pads, ponds and canals are in the ground model." },
-  { icon: "rainy-outline", t: "Design storms and surge", d: "NOAA Atlas 14 24-hour rainfall (2- to 100-year) and the Helene storm tide recorded at Clearwater Beach, rescaled to any height." },
-  { icon: "water-outline", t: "Physics, then AI", d: "A 2D shallow-water solver floods each tile. A neural operator trained on thousands of those runs answers in a second, with a 30-member ensemble for the uncertainty band." },
-];
+import { useTheme } from "../theme";
+import { Group, Header, Row, Segmented, Txt } from "../ui";
 
 export function AboutScreen() {
-  const st = useStore();
+  const st = useStore(); const t = useTheme();
+  const ready = st.backend === "fno";
   return (
-    <ScrollView contentContainerStyle={s.body}>
-      <View style={{ gap: 6 }}>
-        <Text style={T.kicker}>ABOUT</Text>
-        <Text style={T.h1}>Pasco Flood Screening Tool</Text>
-        <Text style={T.body}>Pasco committed $235 million to flood mitigation with a five-year deadline. This tool shows where water collects in design storms and surge, and which projects remove the most of it per dollar.</Text>
-      </View>
-      <Card style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <Icon name={st.backend === "fno" ? "flash" : "hourglass-outline"} size={20} color={st.backend === "fno" ? C.ok : C.warn} />
-        <View style={{ flex: 1 }}>
-          <Text style={T.h3}>{st.backend === "fno" ? "Neural operator online" : "Running on the physics solver"}</Text>
-          <Text style={T.small}>{st.backend === "fno" ? "Scenarios return in about a second." : "The trained model isn't installed yet, so each scenario takes about two minutes. Results are cached."}</Text>
+    <View style={{ gap: 22 }}>
+      <Header title="Settings" back="Back" onBack={() => st.set({ tab: st.openPlaceId ? "home" : "home" })} />
+
+      <Group title="Appearance">
+        <View style={{ padding: 12 }}>
+          <Segmented value={st.appearance} onChange={(v) => st.set({ appearance: v })}
+            options={[{ value: "system", label: "Automatic" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} />
         </View>
-        <Pill label={st.apiOk === false ? "offline" : st.backend} color={st.apiOk === false ? C.bad : st.backend === "fno" ? C.ok : C.warn} />
-      </Card>
+      </Group>
+      <Group title="Map">
+        <View style={{ padding: 12 }}>
+          <Segmented value={st.mapStyle} onChange={(v) => st.set({ mapStyle: v })}
+            options={[{ value: "streets", label: "Streets", icon: "map-outline" }, { value: "satellite", label: "Satellite", icon: "earth-outline" }]} />
+        </View>
+      </Group>
 
-      <SectionTitle title="How it works" />
-      {STEPS.map((x) => (
-        <Card key={x.t} style={{ flexDirection: "row", gap: 12 }}>
-          <Icon name={x.icon} size={22} color={C.accent} />
-          <View style={{ flex: 1, gap: 3 }}><Text style={T.h3}>{x.t}</Text><Text style={T.small}>{x.d}</Text></View>
-        </Card>
-      ))}
+      <Group title="Status">
+        <Row icon={ready ? "flash" : "time"} iconBg={st.apiOk === false ? "#FF3B30" : ready ? "#34C759" : "#FF9500"}
+          title={st.apiOk === false ? "Can't reach the flood service" : ready ? "Fast results" : "Detailed results"}
+          subtitle={st.apiOk === false ? "Check your connection, or that the server is running." : ready ? "Answers in about a second." : "Each storm takes about two minutes to simulate. Results are saved, so you only wait once."} />
+      </Group>
 
-      <SectionTitle title="Reading the map" />
-      <Card style={{ gap: 10 }}>
-        {[["rgba(76,195,255,0.8)", "Coastal low-lying", "Ground mostly under 10 ft and open to the Gulf: surge and rain."],
-          ["rgba(64,110,255,0.8)", "Low-lying inland", "Ground mostly under 10 ft: rain collects here first."],
-          ["rgba(150,190,140,0.6)", "Higher ground", "Modeled on demand; flooding is local to ponds and low streets."]].map(([c, t, d]) => (
-          <View key={t} style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
-            <View style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: c, marginTop: 2 }} />
-            <View style={{ flex: 1 }}><Text style={T.h3}>{t}</Text><Text style={T.small}>{d}</Text></View>
-          </View>
-        ))}
-      </Card>
+      <Group title="How it works">
+        <Row icon="layers" iconBg="#5E5CE6" title="Real ground" subtitle="The county's 2018 laser survey, at 10 m detail, with building pads, ponds and canals." />
+        <Row icon="rainy" iconBg="#007AFF" title="Real storms" subtitle="NOAA rainfall statistics for Pasco, and the storm tide Helene brought to Clearwater in 2024." />
+        <Row icon="water" iconBg="#32ADE6" title="Water physics" subtitle="We simulate water flowing across the ground minute by minute, then take the deepest it gets." />
+        <Row icon="analytics" iconBg="#AF52DE" title="Ranges, not guesses" subtitle="Each answer is re-run with different rain, surge and ground heights to show a likely range." />
+      </Group>
 
-      <SectionTitle title="Limits — please read" />
-      <Card style={{ gap: 6 }}>
-        {["Screening-grade: it ranks neighborhoods for full engineering study; it does not replace one.",
-          "Storm drains and pipes are not modeled, so depths lean high where drainage is good.",
-          "Each run covers a 1.3 km square centred on your point; water arriving from far outside it is not included.",
-          "A home is counted as flooded when its 10 m lidar cell has more than 1 ft of water at the peak."].map((t) => (
-          <View key={t} style={{ flexDirection: "row", gap: 8 }}><Text style={{ color: C.warn }}>•</Text><Text style={[T.small, { flex: 1 }]}>{t}</Text></View>
-        ))}
-      </Card>
+      <Group title="Limits" footer="This is a screening tool: it shows where to look first. It's not a substitute for an engineering study or official FEMA maps.">
+        <Row icon="warning" iconBg="#FF9500" title="Storm drains aren't included" subtitle="Where drainage is good, real flooding is usually less than shown." />
+        <Row icon="scan" iconBg="#8E8E93" title="One area at a time" subtitle="Each check covers 1.3 km around a point. Water from much farther away isn't included." />
+        <Row icon="home" iconBg="#8E8E93" title="Depth at the building" subtitle="A home counts as flooded when more than a foot of water reaches its spot on the map." />
+      </Group>
 
-      <SectionTitle title="Data" />
-      <Text style={T.small}>SWFWMD 2018 Pasco lidar DEM · NOAA Atlas 14 · NOAA tide gauge 8726724 · FEMA National Flood Hazard Layer · Pasco County building footprints, address points and observed-flooding records · SWFWMD watershed model flood areas · USGS high-water marks (validation).</Text>
-    </ScrollView>
+      <Group title="Data">
+        <Row title="Ground" value="SWFWMD lidar, 2018" />
+        <Row title="Rainfall" value="NOAA Atlas 14" />
+        <Row title="Surge" value="NOAA gauge 8726724" />
+        <Row title="Flood zones" value="FEMA NFHL" />
+        <Row title="Buildings & addresses" value="Pasco County" />
+      </Group>
+      <Txt v="footnote" color="label3" center>Pasco Flood Check</Txt>
+    </View>
   );
 }
-
-const s = StyleSheet.create({ body: { padding: 18, gap: 12, paddingBottom: 40 } });

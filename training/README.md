@@ -26,7 +26,7 @@ python -m pfst.generate --start 1500 --n 1500      # machine B
 
 - DEM tiles download on first use (SWFWMD image server) into `data/dem/` and are cached after that.
 - Output goes to `data/dataset/{train,test}/sNNNNN.npz`; the `test` split is the 16 held-out tiles in `pfst/tiles.json`. That is 126 tiles drawn coastal-first: coastal weight 2, low-lying 1, higher ground 0.4.
-- **No seed set is needed:** generate everything on the compute machine from k = 0. The old `seed_dataset_2026_k0-95.tgz` release belongs to the retired 48-tile catalog, so don't use it.
+- **No seed set is needed:** generate everything on the compute machine from k = 0.
 - Deep `h_max` values (4–7 m) are real: they occur in excavated retention ponds (a pond filling up) and on below-sea-level land under high surge.
 - Use **physical** cores for `--workers`, not threads. On an SMT laptop, 18 workers on 10 cores ran each job 2–3× slower.
 

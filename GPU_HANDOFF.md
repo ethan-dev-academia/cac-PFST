@@ -32,7 +32,7 @@ pytest                              # 17 tests, ~3 min; all must pass before goi
 ```
 
 ### 2. No seed needed
-This machine generates the **whole** dataset itself. Scenario k is fully determined by `(seed 2026, k, pfst/tiles.json)`, so nothing has to be copied from the dev laptop. Ignore the old `seed-dataset-2026-k0-95` release; it was made with the retired 48-tile catalog.
+This machine generates the **whole** dataset itself. Scenario k is fully determined by `(seed 2026, k, pfst/tiles.json)`, so nothing has to be copied from the dev laptop.
 
 ### 3. Generate the dataset (CPU-bound, long-running)
 The solver is pure numpy, and `SOLVER_SPEC.md` §9 requires that, so **the GPU does not help here**.

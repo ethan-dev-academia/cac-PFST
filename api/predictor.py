@@ -16,7 +16,18 @@ from scipy import ndimage
 from pfst import features, geo, rainfall, scenario
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-MODEL_PATH = pathlib.Path(os.environ.get("PFST_MODEL", ROOT / "models" / "fno.pt"))
+
+
+def _default_model_path():
+    # fno.pt (float32) if present, else the committed half-precision fno_fp16.pt
+    for name in ("fno.pt", "fno_fp16.pt"):
+        p = ROOT / "models" / name
+        if p.exists():
+            return p
+    return ROOT / "models" / "fno.pt"
+
+
+MODEL_PATH = pathlib.Path(os.environ.get("PFST_MODEL") or _default_model_path())
 SURGE_SD_FT = 1.0       # ensemble surge spread, clipped to ±2 ft
 DEM_NOISE_M = 0.10      # lidar RMSEz 0.33 ft
 N_ENSEMBLE = 30

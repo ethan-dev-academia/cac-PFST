@@ -44,6 +44,11 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 app.mount("/viz", StaticFiles(directory=pathlib.Path(__file__).with_name("static"), html=True), name="viz")
 
+# The exported Expo web app, if present (npx expo export), so one server hosts UI + API.
+_APP_DIST = ROOT / "app" / "dist"
+if _APP_DIST.is_dir():
+    app.mount("/app", StaticFiles(directory=_APP_DIST, html=True), name="app")
+
 STATE = {"predictor": None}
 JOBS = {}
 LOCK = threading.Lock()

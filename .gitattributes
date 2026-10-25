@@ -1,0 +1,4 @@
+# Bundled, self-contained assets — never apply EOL conversion
+app/dist/** -text
+models/** -text
+data/dem/** -text

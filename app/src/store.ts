@@ -51,6 +51,7 @@ interface State extends Persisted {
   tiles: TileSummary[];
   presets: Presets | null;
   backend: string;
+  modelInfo: { epoch?: number; test?: { rel_l2_hmax?: number; iou_1ft?: number; mae_m?: number } } | null;
   apiOk: boolean | null;
   tileId: string | null;
   tileMeta: TileSummary | null;
@@ -96,6 +97,7 @@ export const useStore = create<State>()(persist((set) => ({
   tiles: [],
   presets: null,
   backend: "…",
+  modelInfo: null,
   apiOk: null,
   tileId: null,
   tileMeta: null,

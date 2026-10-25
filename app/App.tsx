@@ -51,7 +51,7 @@ function Shell() {
   const both = (m: object) => { mapRef.current?.post(m); xRef.current?.post(m); };
 
   useEffect(() => {
-    api.health().then((h) => st.set({ backend: h.backend, apiOk: true })).catch(() => st.set({ apiOk: false }));
+    api.health().then((h) => st.set({ backend: h.backend, modelInfo: h.info ?? null, apiOk: true })).catch(() => st.set({ apiOk: false }));
     api.presets().then((p) => st.set({ presets: p, surgeFt: p.tide_ft })).catch(() => {});
   }, []);
 
@@ -258,7 +258,7 @@ function Shell() {
         <View style={[s.banner, { top: wide ? 12 : ins.top + 60, backgroundColor: t.surface, shadowColor: t.shadow }]}>
           <Icon name="cloud-offline-outline" size={18} color={t.bad} />
           <Txt v="subhead">Can't reach the flood service.</Txt>
-          <Pressable onPress={() => api.health().then((h) => st.set({ backend: h.backend, apiOk: true })).catch(() => {})}><Txt v="subhead" color="tint">Retry</Txt></Pressable>
+          <Pressable onPress={() => api.health().then((h) => st.set({ backend: h.backend, modelInfo: h.info ?? null, apiOk: true })).catch(() => {})}><Txt v="subhead" color="tint">Retry</Txt></Pressable>
         </View>
       )}
       {!st.seenIntro && hydrated && <Welcome />}
